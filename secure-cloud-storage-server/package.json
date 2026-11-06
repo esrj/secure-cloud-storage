@@ -1,0 +1,54 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "Server for proxy re-encryption storage project",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "start": "node index.js",
+    "build": "node build.js ",
+    "manage": "node CLI.js",
+    "set-admin": "node scripts/set-admin.mjs",
+    "purge-agent-log": "node scripts/purge-agent-log.mjs"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aldenml/ecc": "^1.1.0",
+    "@inquirer/prompts": "^8.0.1",
+    "@simplewebauthn/server": "^14.0.2",
+    "config": "^4.1.1",
+    "ethers": "^6.15.0",
+    "express": "^5.1.0",
+    "file-type": "^21.1.0",
+    "ftp-srv": "^4.6.3",
+    "js-yaml": "^4.1.1",
+    "mailersend": "^2.6.0",
+    "mcl-wasm": "^2.0.0",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.10",
+    "pg": "^8.16.3",
+    "socket.io": "^4.8.1",
+    "ssh2": "^1.17.0",
+    "tty-table": "^5.0.0",
+    "winston": "^3.18.3",
+    "winston-transport": "^4.9.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@eslint/js": "^9.39.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "esbuild": "^0.27.0",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2"
+  },
+  "overrides": {
+    "ftp-srv": {
+      "ip": "https://registry.npmjs.org/neoip/-/neoip-2.1.0.tgz"
+    }
+  }
+}

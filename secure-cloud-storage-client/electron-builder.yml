@@ -1,0 +1,84 @@
+# 唯一的打包設定檔。
+# 注意：package.json 不可再放 `build` 欄位。electron-builder 只要在 package.json 看到 `build`
+# 就會改讀它並完全忽略這個檔案（app-builder-lib/out/util/config/load.js: loadConfig）。
+appId: com.electron.app
+productName: client-side
+directories:
+  buildResources: build
+  output: dist
+
+# 以 electron-builder 預設的 **/* 為基底，只列排除項。
+# config/default.yaml 必須進包：main 透過 app.getAppPath()/config 讀設定。
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!.scannerwork/**'
+  - '!sonar-project.properties'
+  - '!downloads/**'
+  - '!{test/**,jest.config.js}'
+  - '!scripts/**'
+  - '!*.log'
+  - '!*.keys'
+  - '!config/local*.yaml'
+  - '!dist/**'
+  - '!release/**'
+  # resources/ 一律走 extraResources（模型檔太大，不能進 asar）
+  - '!resources/**'
+  # node-llama-cpp：只留執行期需要的 JS 與 prebuilt 二進位檔。
+  # 打包後在 asar 內無法 build，llama.cpp 原始碼 / 本機 build 產物 / 工具鏈都用不到（約 330MB）。
+  - '!node_modules/node-llama-cpp/llama/llama.cpp/**'
+  - '!node_modules/node-llama-cpp/llama/localBuilds/**'
+  - '!node_modules/node-llama-cpp/llama/xpack/**'
+  - '!node_modules/node-llama-cpp/llama/gitRelease.bundle'
+
+# 原生二進位檔不能留在 asar 裡（node-llama-cpp 官方 Electron 指南）
+asarUnpack:
+  - node_modules/node-llama-cpp/**
+  - node_modules/@node-llama-cpp/**
+
+# 複製到 <App>/Contents/Resources/，執行期以 process.resourcesPath 取得
+extraResources:
+  - from: resources/models
+    to: models
+    filter:
+      - gemma-4-E4B-it-Q4_K_M.gguf
+  - from: resources/fido
+    to: fido
+    filter:
+      - '*.py'
+
+win:
+  executableName: client-side
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  category: public.app-category.productivity
+  # 只做 dmg；預設的 dmg+zip 會把 3GB 的 app 再壓一次。
+  target:
+    - dmg
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: Application requests access to the device's camera.
+    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+  maintainer: electronjs.org
+  category: Utility
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false
+publish:
+  provider: generic
+  url: https://example.com/auto-updates

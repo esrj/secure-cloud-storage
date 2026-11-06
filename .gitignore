@@ -1,0 +1,13 @@
+.DS_Store
+.run/
+
+# SonarQube：本機掃描環境、設定與報告
+sonarqube/
+sonar-project.properties
+.scannerwork/
+
+# 單機 Docker 部署（Server + TA + PostgreSQL + Ollama）
+deploy/
+
+# 併入前 client 獨立 repo 的本機備份
+.git-backup/

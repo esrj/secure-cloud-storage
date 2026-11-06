@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Noto Sans TC';
+  src: local('Noto Sans TC'), url('./NotoSansTC-VariableFont_wght.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Noto Serif TC';
+  src: local('Noto Serif TC'), url('./NotoSerifTC-VariableFont_wght.ttf') format('truetype');
+}
