@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import { logger } from '../Logger.js'
 import { classifyDocuments } from './ClassifyService.js'
 import { getClassifierSettings } from './classifierSettings.js'
+import { getWindowsClassifierSupport } from './windowsClassifierModel.js'
+import { withUserHint } from './classifierModelErrors.js'
 
 /** @typedef {{ state: 'running'|'done', result?: object, error?: string, ts?: number }} ClassifyEntry */
 
@@ -86,13 +88,18 @@ export async function runPreUploadClassification(notify, batchKey, paths, mode) 
     logger.error(`[SmartClassify] Classification failed for batch ${batchKey}: ${msg}`, {
       stack: e instanceof Error ? e.stack : undefined
     })
-    const errResult = {
-      supported: false,
-      reason: 'CLASSIFY_EXCEPTION',
-      llmError: msg,
-      labels: [],
-      final_labels: []
-    }
+    // Windows installer: adds a user-facing hint; returned as-is on macOS.
+    const errResult = withUserHint(
+      {
+        supported: false,
+        reason: 'CLASSIFY_EXCEPTION',
+        llmError: msg,
+        labels: [],
+        final_labels: []
+      },
+      e,
+      getWindowsClassifierSupport()
+    )
     cache.set(batchKey, { state: 'done', result: errResult, ts: Date.now() })
     evictIfNeeded()
     notify({ batchKey, phase: 'finished', result: errResult })

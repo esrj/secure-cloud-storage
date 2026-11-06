@@ -14,6 +14,11 @@
  *      the whole batch — exactly the "看整批、給同一組標籤" semantics the
  *      product asks for.
  *   4. Apply threshold to derive final_labels for the batch.
+ *
+ * Windows installer only (getWindowsClassifierSupport() is null elsewhere):
+ * the model is checked before text extraction, a model-level failure (missing
+ * model, load failure, cancel, timeout) stops the remaining groups, and failed
+ * results carry a `userHint` for the UI. macOS results are unchanged.
  */
 import { basename } from 'node:path'
 import { extractTextFromFiles } from './TextExtractService.js'
@@ -28,6 +33,8 @@ import {
 } from '../utils/classifyZhJson.js'
 import { getSmartClassifyMode } from './classifierRuntime.js'
 import { logger } from '../Logger.js'
+import { getWindowsClassifierSupport } from './windowsClassifierModel.js'
+import { isModelLevelError, withUserHint } from './classifierModelErrors.js'
 
 /**
  * Per-file framing overhead in the composite prompt (the `# 檔案 N：xxx.pdf`
@@ -191,9 +198,15 @@ function chunkArray(arr, size) {
  */
 export async function classifyDocuments(input) {
   const enable = input?.enable !== false
+  // null on macOS / Linux / dev: every withUserHint() below is then a no-op.
+  const win = getWindowsClassifierSupport()
 
   if (!enable) {
-    return { supported: false, reason: 'DISABLED', labels: [], final_labels: [] }
+    return withUserHint(
+      { supported: false, reason: 'DISABLED', labels: [], final_labels: [] },
+      null,
+      win
+    )
   }
 
   // V11: prefer the mode snapshotted by the caller at file-pick time. The live
@@ -209,7 +222,11 @@ export async function classifyDocuments(input) {
         ? 'fast'
         : getSmartClassifyMode()
   if (mode === 'off') {
-    return { supported: false, reason: 'DISABLED', labels: [], final_labels: [] }
+    return withUserHint(
+      { supported: false, reason: 'DISABLED', labels: [], final_labels: [] },
+      null,
+      win
+    )
   }
 
   const settings = getClassifierSettings()
@@ -222,13 +239,37 @@ export async function classifyDocuments(input) {
     : []
 
   if (paths.length === 0) {
-    return {
-      supported: false,
-      reason: 'NO_FILES',
-      labels: [],
-      final_labels: [],
-      extraction: { attempted: false }
-    }
+    return withUserHint(
+      {
+        supported: false,
+        reason: 'NO_FILES',
+        labels: [],
+        final_labels: [],
+        extraction: { attempted: false }
+      },
+      null,
+      win
+    )
+  }
+
+  // Windows installer: report a missing / invalid model up front instead of
+  // extracting text first and then failing once per group.
+  const notReady = win ? win.checkModelReady() : null
+  if (notReady) {
+    logger.warn(`[Classify] model not ready (${notReady.code}): ${notReady.message}`)
+    return withUserHint(
+      {
+        supported: false,
+        reason: 'LLM_GENERATE_FAILED',
+        labels: [],
+        final_labels: [],
+        extraction: { attempted: false },
+        llmError: notReady.message,
+        thresholdUsed: threshold
+      },
+      notReady,
+      win
+    )
   }
 
   // ── 1. Text extraction ────────────────────────────────────────────────────
@@ -288,6 +329,8 @@ export async function classifyDocuments(input) {
   const okRuns = []
   let lastRaw = ''
   let generateError = null
+  /** @type {unknown} the error object behind generateError (for the Windows hint) */
+  let generateErrorObj = null
   let anyParseFail = false
 
   for (let gi = 0; gi < groups.length; gi++) {
@@ -324,8 +367,12 @@ ${composite}`
       })
     } catch (e) {
       generateError = e instanceof Error ? e.message : String(e)
+      generateErrorObj = e
       logger.warn(`[Classify] group ${gi + 1}/${groups.length} generate failed: ${generateError}`)
       report(gi + 1)
+      // Windows: a load failure, cancel or timeout would hit every remaining
+      // group the same way (and reload the model each time), so stop here.
+      if (win && isModelLevelError(e)) break
       continue
     }
 
@@ -343,25 +390,33 @@ ${composite}`
   // ── 3. No usable run → surface the failure ───────────────────────────────
   if (okRuns.length === 0) {
     if (generateError) {
-      return {
+      return withUserHint(
+        {
+          supported: false,
+          reason: 'LLM_GENERATE_FAILED',
+          labels: [],
+          final_labels: [],
+          extraction,
+          llmError: generateError,
+          thresholdUsed: threshold
+        },
+        generateErrorObj,
+        win
+      )
+    }
+    return withUserHint(
+      {
         supported: false,
-        reason: 'LLM_GENERATE_FAILED',
+        reason: anyParseFail ? 'JSON_PARSE_FAILED' : 'EMPTY_CONTENT',
         labels: [],
         final_labels: [],
         extraction,
-        llmError: generateError,
+        llmRawText: lastRaw || undefined,
         thresholdUsed: threshold
-      }
-    }
-    return {
-      supported: false,
-      reason: anyParseFail ? 'JSON_PARSE_FAILED' : 'EMPTY_CONTENT',
-      labels: [],
-      final_labels: [],
-      extraction,
-      llmRawText: lastRaw || undefined,
-      thresholdUsed: threshold
-    }
+      },
+      null,
+      win
+    )
   }
 
   // ── 4. Merge runs (max score per label) + threshold ──────────────────────

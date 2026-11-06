@@ -1,5 +1,9 @@
 /**
  * 上傳後設定：以「智慧分類結果 → 套用或手動 → 標籤」為主；其餘權限／屬性／說明為次要區塊。
+ *
+ * Windows 安裝版（window.electronAPI.classifierModel 存在、主程序回報 managed）另外有：
+ * 模型載入進度與「取消分析」、失敗時以 userHint 顯示使用者看得懂的說明（不顯示錯誤代碼、
+ * 路徑或環境變數），缺模型時可直接在這裡下載或匯入。macOS 沒有這些欄位與事件，畫面不變。
  */
 import { useEffect, useState, useMemo, useRef } from 'react'
 import {
@@ -20,6 +24,7 @@ import { Validators } from './Validator'
 import { PermissionType } from './Types'
 import toast from 'react-hot-toast'
 import AnalysisSpinner from './AnalysisSpinner'
+import ModelSetupPanel from './ModelSetupPanel'
 
 function PostUploadDialog({
   fileIds,
@@ -39,6 +44,14 @@ function PostUploadDialog({
   const [classifyThreshold, setClassifyThreshold] = useState(0.55)
   /** apply = 套用 LM 建議到標籤欄；manual = 不套用，自行輸入 */
   const [lmTagApplication, setLmTagApplication] = useState('apply')
+  // Windows 模型管理（macOS 永遠是 false / null）
+  const [modelManaged, setModelManaged] = useState(false)
+  const [modelLoad, setModelLoad] = useState(null)
+  const [showModelSetup, setShowModelSetup] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  // On the CPU backend node-llama-cpp only notices a cancel after the current
+  // prompt evaluation (measured ~30 s), so show that the request was taken.
+  const [cancelling, setCancelling] = useState(false)
 
   const effectivePreview = useMemo(
     () => previewOverride ?? liveClassifyResult ?? classificationPreview,
@@ -62,20 +75,33 @@ function PostUploadDialog({
   }, [classificationPreview])
 
   useEffect(() => {
+    // Windows only. classifier-llm-progress used to carry Ollama 'serve' / 'pull'
+    // messages, but nothing has sent those since the move to node-llama-cpp; the
+    // channel now carries the Windows model manager's 'model-load' progress.
+    const api = window.electronAPI?.classifierModel
+    if (!api) return undefined
+    void api
+      .status()
+      .then((s) => setModelManaged(Boolean(s?.managed)))
+      .catch(() => {})
     const unsub = window.electronAPI?.subscribeClassifierLlmProgress?.((p) => {
-      if (p?.phase === 'serve' && p?.message) {
-        toast(p.message, { id: 'ollama-serve', duration: 4000 })
-      }
-      if (p?.phase === 'pull') {
-        const pct = typeof p.percent === 'number' ? ` ${p.percent}%` : ''
-        const line = p.message || p.status || ''
-        if (line || pct.trim()) {
-          toast(`模型：${line}${pct}`, { id: 'ollama-pull', duration: 6000 })
-        }
-      }
+      if (p?.phase !== 'model-load') return
+      if (p.state === 'start') setModelLoad({ percent: 0 })
+      else if (p.state === 'progress') setModelLoad({ percent: p.percent })
+      else setModelLoad(null)
     })
     return () => unsub?.()
   }, [])
+
+  async function handleCancelRun() {
+    setCancelling(true)
+    await window.electronAPI?.classifierModel?.cancelRun?.()
+  }
+
+  // A new result (or a new batch) ends any pending cancel.
+  useEffect(() => {
+    setCancelling(false)
+  }, [classificationPreview, liveClassifyResult, previewOverride])
 
   useEffect(() => {
     if (!classificationPreview?.pending || !pendingKey) return
@@ -117,6 +143,8 @@ function PostUploadDialog({
     !lmWaiting &&
     !lmSucceeded &&
     effectivePreview?.reason !== 'CLASSIFIER_DISABLED'
+  /** Windows only: { code, message, action } from the main process; never set on macOS. */
+  const userHint = effectivePreview?.userHint ?? null
 
   // V6: the smart-classify result is computed pre-upload over the originally
   // *selected* files, but tags are applied to the files that actually finished
@@ -228,6 +256,7 @@ function PostUploadDialog({
     }
     try {
       toast('重新執行智慧分類…', { id: 'reclassify' })
+      setRetrying(true)
       const classifyRes = await window.electronAPI.classifyDocuments({
         enable: true,
         paths: sourcePaths,
@@ -246,11 +275,19 @@ function PostUploadDialog({
           setTags(classifyRes.final_labels.slice(0, 5).join(' '))
         }
         toast.success('已重新取得分類結果')
+      } else if (classifyRes?.userHint) {
+        // Windows: show the explanation (and setup option) instead of a raw reason code.
+        setPreviewOverride(classifyRes)
+        setShowModelSetup(false)
+        toast.error(classifyRes.userHint.message)
       } else {
         toast.error(classifyRes?.reason || classifyRes?.llmError || '分類失敗')
       }
     } catch (e) {
       toast.error(`重試失敗：${e.message}`)
+    } finally {
+      setRetrying(false)
+      setCancelling(false)
     }
   }
 
@@ -311,6 +348,23 @@ function PostUploadDialog({
                     <Typography variant="small" className="mt-2 text-xs font-medium text-blue-800">
                       進度：{analyzeProgress.done} / {analyzeProgress.total} 段推論
                     </Typography>
+                  )}
+                  {modelLoad && (
+                    <Typography variant="small" className="mt-2 text-xs font-medium text-blue-800">
+                      正在載入模型 {modelLoad.percent}%（第一次載入需要較久）
+                    </Typography>
+                  )}
+                  {modelManaged && (
+                    <Button
+                      size="sm"
+                      variant="text"
+                      color="red"
+                      className="mt-2 px-2 py-1"
+                      disabled={cancelling}
+                      onClick={() => void handleCancelRun()}
+                    >
+                      {cancelling ? '正在停止…' : '取消分析'}
+                    </Button>
                   )}
                 </div>
               </div>
@@ -389,7 +443,75 @@ function PostUploadDialog({
               </div>
             )}
 
-            {lmFailed && (
+            {/* Windows：使用者看得懂的說明，不顯示錯誤代碼／路徑；缺模型時可直接下載或匯入 */}
+            {lmFailed && userHint && (
+              <div className="flex flex-col gap-2">
+                <Typography variant="small" className="font-semibold text-red-900">
+                  智慧分類未完成
+                </Typography>
+                <Typography variant="small" className="text-xs text-red-800">
+                  {userHint.message}
+                </Typography>
+                {userHint.action === 'setup' &&
+                  (showModelSetup ? (
+                    <div className="rounded-lg border border-blue-gray-200 bg-white px-3 py-3">
+                      <ModelSetupPanel onLater={() => setShowModelSetup(false)} laterLabel="收合" />
+                    </div>
+                  ) : (
+                    <div>
+                      <Button size="sm" color="blue" onClick={() => setShowModelSetup(true)}>
+                        下載或匯入模型
+                      </Button>
+                    </div>
+                  ))}
+                {userHint.action !== null && (
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <Select
+                      value={String(classifyThreshold)}
+                      onChange={(v) => setClassifyThreshold(parseFloat(String(v)))}
+                      label="重試門檻"
+                      labelProps={{ className: 'peer-focus:hidden' }}
+                      className="min-w-[8rem] focus:!border-t-gray-900"
+                    >
+                      {['0.35', '0.45', '0.55', '0.65', '0.75'].map((v) => (
+                        <Option key={v} value={v}>
+                          {v}
+                        </Option>
+                      ))}
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outlined"
+                      color="red"
+                      disabled={retrying}
+                      onClick={() => void handleRetryClassify()}
+                    >
+                      重試分類
+                    </Button>
+                  </div>
+                )}
+                {retrying && (
+                  <div className="flex flex-row items-center gap-2">
+                    <AnalysisSpinner className="h-4 w-4" />
+                    <Typography variant="small" className="text-xs text-blue-gray-700">
+                      {modelLoad ? `正在載入模型 ${modelLoad.percent}%` : '重新分析中…'}
+                    </Typography>
+                    <Button
+                      size="sm"
+                      variant="text"
+                      color="red"
+                      className="px-2 py-1"
+                      disabled={cancelling}
+                      onClick={() => void handleCancelRun()}
+                    >
+                      {cancelling ? '正在停止…' : '取消'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {lmFailed && !userHint && (
               <div className="flex flex-col gap-2">
                 <Typography variant="small" className="font-semibold text-red-900">
                   分析失敗：{effectivePreview?.reason || 'UNKNOWN'}

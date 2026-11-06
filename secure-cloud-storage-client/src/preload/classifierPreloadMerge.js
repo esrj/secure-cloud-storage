@@ -55,5 +55,19 @@ export function mergeClassifierApisIntoElectronApi(electronApi) {
     return () => ipcRenderer.removeListener('preupload-classify-status', fn)
   }
 
+  // Windows only: model download / import / verify / cancel. The renderer
+  // checks for this object, so on macOS every new UI path stays dormant.
+  // Progress arrives on subscribeClassifierLlmProgress (phase 'model-job' / 'model-load').
+  if (process.platform === 'win32') {
+    electronApi.classifierModel = {
+      status: () => ipcRenderer.invoke('classifier-model:status'),
+      download: () => ipcRenderer.invoke('classifier-model:download'),
+      importFile: () => ipcRenderer.invoke('classifier-model:import'),
+      verifyExisting: () => ipcRenderer.invoke('classifier-model:verify-existing'),
+      cancelJob: () => ipcRenderer.invoke('classifier-model:cancel-job'),
+      cancelRun: () => ipcRenderer.invoke('classifier-model:cancel-run')
+    }
+  }
+
   return electronApi
 }

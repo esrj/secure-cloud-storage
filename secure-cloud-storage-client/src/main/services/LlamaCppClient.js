@@ -5,10 +5,17 @@
  * require()-d from a CommonJS bundle.  All imports are therefore deferred to
  * runtime via dynamic import() which is compatible with ESM from any context.
  *
- * Model path resolution (highest priority first):
+ * Model path resolution (highest priority first; see classifierModelLocator.js):
  *   1. LLAMA_MODEL_PATH environment variable
  *   2. <projectRoot>/resources/models/<filename>  (dev)
  *   3. <resourcesPath>/models/<filename>           (production)
+ * The Windows installer ships without the model and instead looks in the
+ * folder the Windows model manager downloads / imports into (between 1 and 3).
+ *
+ * Windows installer only (windowsClassifierModel.js; null on macOS):
+ * the model is checked before loading, the load can be cancelled and has a
+ * timeout, progress is reported, a GPU load failure is retried once on the
+ * CPU backend, and inference gets a longer timeout. macOS is unchanged.
  *
  * Only one model tier remains: 'fast' = Gemma 4 E4B-it (Q4_K_M GGUF, Apache 2.0).
  * The former 'medium' (9B) and 'high' (27B) tiers were removed in 2026-10 and the
@@ -30,9 +37,11 @@
  */
 import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import { join } from 'node:path'
 import { existsSync, statSync } from 'node:fs'
 import { logger } from '../Logger'
+import { resolveModelPath } from './classifierModelLocator.js'
+import { getWindowsClassifierSupport } from './windowsClassifierModel.js'
+import { ClassifierModelError, MODEL_ERROR, isModelLevelError } from './classifierModelErrors.js'
 
 // ── Mode → model filename mapping ────────────────────────────────────────────
 // 2026-10：只保留一個模型（fast）= Gemma 4 E4B-it Q4_K_M。9B（medium）與 27B（high）
@@ -177,12 +186,15 @@ async function getNLC() {
  * @returns {string} Absolute path to the GGUF model file.
  */
 export function getModelPath(mode = 'fast') {
-  if (process.env.LLAMA_MODEL_PATH) return process.env.LLAMA_MODEL_PATH
-  const filename = MODEL_MAP[mode] || MODEL_MAP.fast
-  if (is.dev) {
-    return join(app.getAppPath(), 'resources', 'models', filename)
-  }
-  return join(process.resourcesPath, 'models', filename)
+  return resolveModelPath({
+    filename: MODEL_MAP[mode] || MODEL_MAP.fast,
+    env: process.env,
+    isDev: is.dev,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    // null except in the Windows installer → the original order above.
+    managed: getWindowsClassifierSupport()?.managedLocation ?? null
+  }).path
 }
 
 // ── Initialisation ────────────────────────────────────────────────────────────
@@ -208,6 +220,12 @@ async function ensureModel(mode) {
   // Mode changed (or first load): dispose any previous context + model.
   await teardown()
 
+  // Windows installer: a missing / invalid model throws a ClassifierModelError
+  // the UI can act on (download / import). null on macOS.
+  const win = getWindowsClassifierSupport()
+  const notReady = win ? win.checkModelReady() : null
+  if (notReady) throw notReady
+
   const modelPath = getModelPath(mode)
   if (!existsSync(modelPath)) {
     throw new Error(
@@ -224,9 +242,80 @@ async function ensureModel(mode) {
   let sizeMB = 'unknown'
   try { sizeMB = (statSync(modelPath).size / (1024 * 1024)).toFixed(1) } catch {}
   logger.info(`[LLM] Loading model mode="${mode}", path="${modelPath}", size=${sizeMB} MB`)
-  _model = await _llama.loadModel({ modelPath })
+  _model = win ? await loadModelOnWindows(win, modelPath) : await _llama.loadModel({ modelPath })
   _loadedMode = mode
   logger.info(`[LLM] Model loaded successfully (mode="${mode}", trainCtx=${_safeTrainCtx()})`)
+}
+
+/**
+ * Windows installer only (fix plan §4.5): the load reports progress, can be
+ * cancelled from the UI, times out instead of blocking the whole classify
+ * queue, and is retried once on the CPU backend when the GPU backend fails
+ * (e.g. an incompatible driver).
+ * @param {NonNullable<ReturnType<typeof getWindowsClassifierSupport>>} win
+ * @param {string} modelPath
+ */
+async function loadModelOnWindows(win, modelPath) {
+  const abort = new AbortController()
+  const release = win.trackRun(abort)
+  // On timeout also drop everything queued behind this load.
+  const timer = setTimeout(
+    () =>
+      win.cancelRuns(MODEL_ERROR.LOAD_TIMEOUT, `Model load timed out after ${win.loadTimeoutMs}ms`),
+    win.loadTimeoutMs
+  )
+  let lastPercent = -1
+  const onLoadProgress = (p) => {
+    const percent = Math.floor(p * 100)
+    if (percent >= lastPercent + 2 || percent === 100) {
+      lastPercent = percent
+      win.emit({ phase: 'model-load', state: 'progress', percent })
+    }
+  }
+  const load = () => _llama.loadModel({ modelPath, loadSignal: abort.signal, onLoadProgress })
+
+  win.emit({ phase: 'model-load', state: 'start' })
+  const t0 = Date.now()
+  try {
+    let model
+    try {
+      model = await load()
+    } catch (e) {
+      if (abort.signal.aborted || _llama.gpu === false) throw e
+      logger.warn(
+        `[LLM] Model load on the ${_llama.gpu} backend failed, retrying on CPU: ${e?.message ?? e}`
+      )
+      try { await _llama.dispose() } catch { /* ignore */ }
+      _llama = null
+      _grammar = null // grammars belong to the disposed Llama instance
+      const { getLlama } = await getNLC()
+      _llama = await getLlama({ gpu: false })
+      model = await load()
+    }
+    logger.info(
+      `[LLM] backend=${_llama.gpu || 'cpu'} gpuLayers=${model.gpuLayers} loadMs=${Date.now() - t0}`
+    )
+    win.emit({ phase: 'model-load', state: 'done' })
+    return model
+  } catch (e) {
+    const reason = abort.signal.aborted ? abort.signal.reason : null
+    const err = isModelLevelError(reason)
+      ? reason
+      : new ClassifierModelError(
+          win.modelSource() === 'env' ? MODEL_ERROR.ENV_PATH_INVALID : MODEL_ERROR.LOAD_FAILED,
+          `Model load failed: ${e?.message ?? e}`,
+          { cause: e }
+        )
+    logger.warn(`[LLM] Model load stopped (${err.code}): ${err.message}`)
+    win.emit({
+      phase: 'model-load',
+      state: err.code === MODEL_ERROR.CANCELLED ? 'cancelled' : 'failed'
+    })
+    throw err
+  } finally {
+    clearTimeout(timer)
+    release()
+  }
 }
 
 /**
@@ -337,9 +426,13 @@ function fitPromptToContext(systemPrompt, userPrompt) {
  * @param {{ system?: string, temperature?: number, mode?: string, contextSize?: number }} opts
  *   `contextSize` is accepted for backward compatibility but ignored — the
  *   context window is now sized token-accurately from the actual prompt.
+ * @param {number} [queuedEpoch] Windows only: cancel epoch when the request was queued
  */
-async function _doGenerate(prompt, opts) {
+async function _doGenerate(prompt, opts, queuedEpoch) {
   const mode = opts.mode || 'fast'
+  const win = getWindowsClassifierSupport()
+  // Windows: a request queued before "cancel" / a load timeout stops here.
+  if (win) win.throwIfCancelledSince(queuedEpoch)
 
   // 1) Load the model first so its tokenizer is available for budgeting.
   await ensureModel(mode)
@@ -354,17 +447,24 @@ async function _doGenerate(prompt, opts) {
 
   // 3) Allocate (or grow) the context to the chosen size.
   await ensureContext(fit.ctxSize)
+  // Windows: a cancel that arrived after the load but before the inference starts.
+  if (win) win.throwIfCancelledSince(queuedEpoch)
 
   const { LlamaChatSession } = await getNLC()
 
   // V8: bound the inference with a wall-clock timeout. The AbortSignal makes
   // node-llama-cpp stop generating and throw; the timer is always cleared.
-  const timeoutMs = GENERATE_TIMEOUT_MS[mode] ?? DEFAULT_GENERATE_TIMEOUT_MS
+  // Windows uses its own, longer limit (measured; see windowsClassifierModel.js).
+  const timeoutMs = win
+    ? win.generateTimeoutMs
+    : (GENERATE_TIMEOUT_MS[mode] ?? DEFAULT_GENERATE_TIMEOUT_MS)
   const abort = new AbortController()
   const timer = setTimeout(
     () => abort.abort(new Error(`LLM generation timed out after ${timeoutMs}ms (mode="${mode}")`)),
     timeoutMs
   )
+  // Windows: the UI's cancel button aborts this inference too.
+  const releaseRun = win ? win.trackRun(abort) : null
 
   const sequence = _context.getSequence()
   try {
@@ -400,11 +500,24 @@ async function _doGenerate(prompt, opts) {
       _context = null
       _loadedCtxSize = 0
     }
+    if (win && abort.signal.aborted) throw windowsAbortError(abort.signal, e)
     throw e
   } finally {
     clearTimeout(timer)
+    releaseRun?.()
     try { await sequence.dispose() } catch { /* ignore */ }
   }
+}
+
+/** Windows: turn an aborted inference into CLASSIFY_CANCELLED or GENERATE_TIMEOUT. */
+function windowsAbortError(signal, cause) {
+  const reason = signal.reason
+  if (isModelLevelError(reason)) return reason
+  return new ClassifierModelError(
+    MODEL_ERROR.GENERATE_TIMEOUT,
+    reason instanceof Error ? reason.message : 'LLM generation timed out',
+    { cause }
+  )
 }
 
 /**
@@ -419,9 +532,11 @@ async function _doGenerate(prompt, opts) {
 export async function generate(prompt, opts = {}) {
   let resolveSlot, rejectSlot
   const slot = new Promise((res, rej) => { resolveSlot = res; rejectSlot = rej })
+  // Windows only (undefined elsewhere): lets a later cancel drop this queued request.
+  const queuedEpoch = getWindowsClassifierSupport()?.runEpoch()
 
   _inferenceChain = _inferenceChain
-    .then(() => _doGenerate(prompt, opts))
+    .then(() => _doGenerate(prompt, opts, queuedEpoch))
     .then(resolveSlot, rejectSlot)
 
   return slot

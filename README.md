@@ -14,7 +14,7 @@
 - 支援檔案/資料夾 CRUD、多檔批次上傳與上傳後批次套用 metadata、多選與批次下載、存取申請、PRE 重加密分享、帳號備份復原（備份密碼或 FIDO2 指紋安全金鑰）、浮水印與下載稽核、管理員/使用者兩層權限與智慧搜尋對話紀錄稽核。
 - 智慧分類使用本機 Gemma 4 E4B-it GGUF（Apache 2.0，與伺服器端 Gemma 4 31B 同家族），不送出檔案內容；智慧搜尋 Agent 預設使用 Ollama（`agent.provider: ollama`）：可以是本機 Ollama，正式/Demo 部署則是伺服器主機上的 GPU Ollama（`gemma4:31b-it-qat`、8k context，見 [`deploy/ollama/`](deploy/ollama/)），Client 經 SSH 隧道連到 `localhost:11435`，查詢與 metadata 只在隧道內往返自有主機、不經第三方；設定為 `gemini` 時才會將查詢、對話與篩選後的公開 metadata 送往 Gemini。每輪智慧搜尋對話都會保存到 Cloud Server（`agent_conversations`/`agent_messages`）供管理員稽核。
 - Runtime 由三個獨立程式組成：Electron Client、Cloud Server、Trusted Authority，另依賴 PostgreSQL、Ethereum 相容節點/合約與可選的郵件服務。
-- 部署：[`deploy/docker-compose.yml`](deploy/docker-compose.yml) 在單一主機啟動 Cloud Server、TA、PostgreSQL 16 與 GPU 版 Ollama（皆有 healthcheck）；主機對外只開 SSH，Client 以 SSH 隧道（macOS [`scripts/tunnel.sh`](scripts/tunnel.sh)、Windows 見 [`win_build.md`](secure-cloud-storage-client/win_build.md)）轉發 3001/2999/7001/11435。macOS 安裝檔由 [`scripts/build-dmg.sh`](scripts/build-dmg.sh) 產生。
+- 部署：[`deploy/docker-compose.yml`](deploy/docker-compose.yml) 在單一主機啟動 Cloud Server、TA、PostgreSQL 16 與 GPU 版 Ollama（皆有 healthcheck）；主機對外只開 SSH，Client 以 SSH 隧道（macOS [`scripts/tunnel.sh`](scripts/tunnel.sh)、Windows 見 [`win_build.md`](secure-cloud-storage-client/win_build.md)）轉發 3001/2999/7001/11435。macOS 安裝檔由 [`scripts/build-dmg.sh`](scripts/build-dmg.sh) 產生，Windows 安裝檔由 [`scripts/build-win.ps1`](scripts/build-win.ps1) 產生。
 - 測試：Server 以 `node --test` 覆蓋 FIDO2 驗證、復原服務、復原資料庫與 `/downloadDb`；Client 覆蓋 `FidoProvider` 與 `RecoveryManager`；另有 `scripts/admin_e2e.mjs`（管理員權限）與 `scripts/fido-e2e.mjs`（實體金鑰）實機腳本。其餘流程仍無自動化測試，見「已知限制」第 18 點。
 
 ## 架構總覽
@@ -755,7 +755,7 @@ CLIENT_PROFILE=test npm run dev   # userData → ~/Library/Application Support/c
 
 舊的 `NODE_APP_INSTANCE=2` + `local-2.yaml` 作法只隔離 config 指到的 keys/wallet 檔名，SQLite 備份與 session 仍共用，不建議再用。
 
-Client 打包（唯一的打包設定是 [`electron-builder.yml`](secure-cloud-storage-client/electron-builder.yml)，`package.json` 的 `build` 欄位已移除，否則 electron-builder 會改讀它）：
+Client 打包（共用設定是 [`electron-builder.yml`](secure-cloud-storage-client/electron-builder.yml)，`package.json` 的 `build` 欄位已移除，否則 electron-builder 會改讀它。Windows 另用 [`electron-builder.win.cjs`](secure-cloud-storage-client/electron-builder.win.cjs)：內容在打包時取自 `electron-builder.yml`，只拿掉模型與 CUDA 後端，macOS/Linux 不受影響）：
 
 ```bash
 # macOS：不要用 npm run build:mac。electron-builder 的 dmg 步驟曾漏掉 165 MB 的
@@ -763,8 +763,15 @@ Client 打包（唯一的打包設定是 [`electron-builder.yml`](secure-cloud-s
 ./scripts/build-dmg.sh      # electron-builder --dir 產 .app → codesign 驗證 → hdiutil 自製 dmg → 掛載再驗證
                             # 產物 secure-cloud-storage-client/dist/client-side-<version>.dmg
 
-# Windows（必須在 Windows 上打包，完整步驟見 secure-cloud-storage-client/win_build.md）
-npm run build && npx electron-builder --win --config electron-builder.yml
+# Windows（必須在 Windows x64 上打包，完整步驟見 secure-cloud-storage-client/win_build.md）
+# 在 repo 根目錄執行（cmd 或 PowerShell 皆可；PowerShell 7 也可直接 .\scripts\build-win.ps1）：
+powershell -ExecutionPolicy Bypass -File scripts\build-win.ps1
+                            # 檢查 Node 與依賴（沒有 node_modules 時自動 npm ci）→ 印出 default.yaml 連線設定
+                            # → npm run build:win（electron-builder --win --config electron-builder.win.cjs，
+                            #   再由 client 的 scripts/verify-win-build.mjs 打開安裝檔檢查：不含 .gguf、
+                            #   含 CPU/Vulkan 推論元件、不含 CUDA、小於 NSIS 2 GB 上限）
+                            # → 印出安裝檔大小與 SHA-256
+                            # 產物 secure-cloud-storage-client/dist/client-side-<version>-setup.exe
 
 npm run build:linux         # AppImage，尚未實測
 ```
@@ -829,7 +836,30 @@ secure-cloud-storage-client/resources/models/gemma-4-E4B-it-Q4_K_M.gguf
 - 每次 inference 最多組合 16 個檔案、約 3,000 characters；大批次會分組推論，再對各 label 取最高分，將合併後的同一組 labels 作為整批建議。
 - 分類流程本身不會把明文或抽取文字送往 Gemini/Cloud Server；同時進行的正常上傳仍會把 ciphertext 與使用者確認後的 metadata 傳到 Cloud Server。
 
-模型檔很大且未納入 Git，建立 installer 前必須自行放入上述目錄。打包設定只有一份：[`electron-builder.yml`](secure-cloud-storage-client/electron-builder.yml)（`package.json` 不可再有 `build` 欄位，否則 electron-builder 會改讀它並忽略 yml）。yml 以 `extraResources` 只複製 `gemma-4-E4B-it-Q4_K_M.gguf` 到 `process.resourcesPath/models`，`asarUnpack` 涵蓋 `node-llama-cpp` 與 `@node-llama-cpp/*`，並排除 llama.cpp 原始碼與本機 build 產物。node-llama-cpp 不支援跨平台打包，Windows 版必須在 Windows 上打包，且 NSIS 安裝檔有 2GB 上限，模型不能內嵌於 Windows installer。
+模型檔很大且未納入 Git，建立 macOS installer 前必須自行放入上述目錄。共用打包設定是 [`electron-builder.yml`](secure-cloud-storage-client/electron-builder.yml)（`package.json` 不可再有 `build` 欄位，否則 electron-builder 會改讀它並忽略 yml）。yml 以 `extraResources` 只複製 `gemma-4-E4B-it-Q4_K_M.gguf` 到 `process.resourcesPath/models`，`asarUnpack` 涵蓋 `node-llama-cpp` 與 `@node-llama-cpp/*`，並排除 llama.cpp 原始碼與本機 build 產物。node-llama-cpp 不支援跨平台打包，Windows 版必須在 Windows 上打包；NSIS 安裝檔有 2GB 上限，所以 Windows 改用 [`electron-builder.win.cjs`](secure-cloud-storage-client/electron-builder.win.cjs) 打包，安裝檔不含模型（見下節）。
+
+#### Windows 安裝版：第一次啟用時下載或匯入模型
+
+Windows 安裝檔不含模型。第一次在檔案列表打開「智慧標籤」、而這台電腦還沒有可用的模型時，會出現「下載模型／匯入模型／稍後設定」；選稍後設定則開關維持關閉，其他功能照常。實作在 [`windowsClassifierModel.js`](secure-cloud-storage-client/src/main/services/windowsClassifierModel.js)（主程序）與 [`ModelSetupPanel.jsx`](secure-cloud-storage-client/src/renderer/src/components/ModelSetupPanel.jsx)；macOS 不會建立也不會顯示這些流程。
+
+- **下載**：固定取 Hugging Face commit `bfc15c38…` 的 `gemma-4-E4B-it-Q4_K_M.gguf`（4,977,171,584 bytes），先寫入 `*.part`，完成後比對隨 Client 發佈的 SHA-256（[`classifierModelManifest.js`](secure-cloud-storage-client/src/main/services/classifierModelManifest.js)，不在執行期向網站取得雜湊）才改名為正式檔。可取消、重試，並以 HTTP Range 接著下載。只請求模型檔本身，不送出文件內容或 metadata；走 Electron 網路堆疊，會套用 Windows 的 proxy 設定。
+- **匯入**：公司或學校網路封鎖 Hugging Face 時，在其他電腦下載同一個檔案，再用「匯入模型」選擇；檢查檔名、大小與 SHA-256，通過後才放進模型資料夾。
+- 取消、磁碟不足、校驗失敗都不會覆蓋或刪除原本可用的模型。下載前顯示所需空間，空間不足時不開始；記憶體低於 16 GB 時先提示。
+- **模型位置**：`%LOCALAPPDATA%\client-side\models\`，所有 `CLIENT_PROFILE` 共用一份，不放在 Roaming。升級與一般移除都不會刪除；要釋放空間，關閉 Client 後手動刪除這個資料夾（約 4.6 GB，含未下載完的 `.part`）。
+- **搜尋順序**（Windows 安裝版）：`LLAMA_MODEL_PATH` → 下載或匯入並通過校驗的模型 → `<安裝目錄>\resources\models\`（相容舊的手動部署）。`LLAMA_MODEL_PATH` 指到不存在的檔案時會提示錯誤，不會改用其他模型。Windows 開發模式（`npm run dev`）與 macOS 的順序不變。
+- **執行**：模型載入與分析中可按「取消分析」（載入中會立即停止；CPU 後端在分析中要等目前這段提示詞處理完，實測約 30 秒）；載入上限 5 分鐘，Windows 單次推論上限 180 秒（macOS 維持 90 秒），GPU 後端載入失敗時改用 CPU 重試一次。失敗時對話框只顯示可採取行動的說明（不顯示錯誤代碼、路徑或環境變數），完整錯誤寫在 log，仍可手動輸入標籤完成上傳。
+- **推論元件**：隨附 CPU（`win-x64`）與 Vulkan（`win-x64-vulkan`），不帶 CUDA（約 545 MB）。
+- `SCS_MODEL_MANAGER=0` 停用這套 Windows 模型管理，回到只認 `LLAMA_MODEL_PATH` 與安裝目錄的舊行為；`SCS_MODEL_MANAGER=1` 讓 Windows 開發模式也走安裝版流程，方便測試。
+
+2026-11-06 Windows 實機量測（Windows 11 x64、i7-8700K 6 核、32 GB、RTX 2080 Ti／驅動 621.01；模型已在檔案快取；system prompt 1,025 tokens、context 4096）：
+
+| 後端 | 載入 | 單檔推論（user 1,618 tokens） | 16 檔批次（user 2,086 tokens） | 記憶體峰值 |
+|---|---:|---:|---:|---:|
+| CPU | 5.1 s | 61.5 s | 65.2 s | 5.6 GB |
+| Vulkan，第一次（含驅動編譯著色器） | 8.8 s | 50.1 s | 4.0 s | 4.0 GB（VRAM 3.65 GB） |
+| Vulkan，之後 | 7.5 s | 2.5 s | 1.9 s | 3.8 GB |
+
+CUDA 預編譯版在這台機器被判定不相容，node-llama-cpp 自動改用 Vulkan。路徑含中文與空白時 CPU、Vulkan 都能開啟模型檔。打包版實測三個檔案（txt、docx、PDF）：Vulkan 冷啟動 62.9 秒（含載入與第一次編譯著色器）、之後 6.0 秒，強制 CPU 85.9 秒。其他硬體（只有內顯、AMD 顯示卡、8 GB 記憶體、ARM64）尚未量測；完整驗收紀錄見 [Windows 智慧分類修復計畫](Windows智慧分類修復計畫.md) 第 11 節。
 
 ### 智慧搜尋 Agent（本機 Ollama 預設 / Gemini 可選）
 
@@ -904,11 +934,11 @@ Production code 固定到 `process.resourcesPath/agentApiKeys.json` 讀 key，�
 11. **FTPS 修正前不可用。** 現行登入路徑把字串 `userId` 當成物件讀取，會在組 storage path 時丟錯並拒絕登入；另外 passive URL 格式有問題且 Server 不強制 TLS。SFTP 的 pre-upload token check 也不完整。HTTPS 是目前最清楚的資料面，但另有 8,000,000 bytes 上限；三種 protocol 都應補 integration tests。
 12. **搜尋、lists 與 logs 沒有 pagination/quota。** 大量 files/users/requests 或 ABSE index 會一次載入/計算，Server 也沒有 per-user storage quota。
 13. **智慧 Agent 的 authorization gate 有限。** scope 已改為 Server 端 `get-agent-file-scope`（自己全部 + 他人公開），但 main 的 Gemini public-only gate 僅信任 Renderer 傳入 record 的 `perm`，沒有向 Server 重新取得 authoritative snapshot。Renderer 被入侵時可偽造 `perm=1` 並經既有 `agentQuery` 送出 private metadata（預設 Ollama provider 下資料留在本機，影響較小；Gemini provider 下 trust boundary 仍包含 query/history 與結果 metadata）。
-14. **Client packaging 可用但未簽章，仍需逐平台驗證。** 打包設定已統一到 `electron-builder.yml`（含 `config/default.yaml`、4B 模型、`resources/fido/*.py` 與 node-llama-cpp 二進位檔）。macOS 必須用 `scripts/build-dmg.sh`：electron-builder 的 dmg 步驟曾漏掉 Electron Framework 導致 App 啟動即崩潰，腳本改為 `--dir` 產 .app 後以 hdiutil 自製並掛載驗證 dmg；另需 `disable-library-validation` entitlement 才能載入 node-llama-cpp 的 dylib。Windows 必須在 Windows 上打包，安裝檔無簽章會被 SmartScreen 攔、Windows 11「智慧型應用程式控制」開啟時會直接封鎖；模型（約 5GB）超過 NSIS 2GB 上限，Windows 打包版目前沒有智慧分類模型。Gemini `agentApiKeys.json` 仍沒有打包規則。
+14. **Client packaging 可用但未簽章，仍需逐平台驗證。** 打包設定已統一到 `electron-builder.yml`（含 `config/default.yaml`、4B 模型、`resources/fido/*.py` 與 node-llama-cpp 二進位檔）。macOS 必須用 `scripts/build-dmg.sh`：electron-builder 的 dmg 步驟曾漏掉 Electron Framework 導致 App 啟動即崩潰，腳本改為 `--dir` 產 .app 後以 hdiutil 自製並掛載驗證 dmg；另需 `disable-library-validation` entitlement 才能載入 node-llama-cpp 的 dylib。Windows 必須在 Windows 上打包，安裝檔無簽章會被 SmartScreen 攔、Windows 11「智慧型應用程式控制」開啟時會直接封鎖；模型（約 5GB）超過 NSIS 2GB 上限，所以 Windows 安裝檔不含模型（`electron-builder.win.cjs`），改在第一次啟用智慧分類時下載或匯入。Gemini `agentApiKeys.json` 仍沒有打包規則。
 15. **TA attribute 更新不會主動推送，部分錯誤路徑也有 bug。** Client/Server cache `/pp` 與 search key；CLI 改屬性/名稱後應重啟或重新初始化。TA 的非 `null y` 相容路徑錯把 array length 當函式；challenge 不符時會呼叫未定義的 `addFailure`，HTTP error middleware 也只設 status 而未結束 response。
 16. **Server/Client 啟動與 Session 有技術債。** Server 部分 listeners 在 schema ready 前開始服務，「idle timeout」實際較像固定 session TTL，使用中不會自動延長；Client 啟動時也沒有 await `initKeys()` 與 `abseManager.init()`，首次建 key 或 TA 較慢時可能先進入 login/ready flow。
 17. **（部分處理）稽核 log 有了管理員查詢入口。** 管理員可在浮水印追蹤頁看到解出使用者的 `download_logs`（`admin-user-download-logs`）；仍沒有依檔案/時間區間查詢的通用介面與 CLI。
-18. **（部分處理）自動化測試只覆蓋復原與備份路由。** Server 以 `node --test test/recovery/*.test.js` 覆蓋 `FidoVerifier`（`softAuthenticator.js` 以真實 P-256 金鑰產生標準 authenticator data 與簽章）、`RecoveryService`（`memoryStores.js` in-memory store）與 `RecoveryDatabase`（需 `SCS_TEST_PG` 指向可建刪 `scs_rt_*` DB 的 PostgreSQL），`node --test test/backup/*.test.js` 覆蓋 `/downloadDb`；Client 以 `node --test test/fido/*.test.mjs` 覆蓋 `FidoProvider`（`fake_helper.mjs` 以同一 NDJSON 協定模擬 python helper）與 `RecoveryManager`，`FIDO_E2E=1` 時改用實體金鑰。實機腳本另有 `client/scripts/admin_e2e.mjs`（管理員權限 10/10、降級一般使用者 7/7）與 `server/scripts/fido-e2e.mjs`（實體金鑰走完綁定與復原，store 全在記憶體）。但 `npm test` 仍指向 Jest（Server 沒裝 Jest、Client 的 `jest.config.js` 用未安裝的 ts-jest），TA `npm test` 固定失敗；上傳/下載/三種傳輸/ABSE/浮水印/批次流程仍沒有自動化測試。
+18. **（部分處理）自動化測試只覆蓋復原與備份路由。** Server 以 `node --test test/recovery/*.test.js` 覆蓋 `FidoVerifier`（`softAuthenticator.js` 以真實 P-256 金鑰產生標準 authenticator data 與簽章）、`RecoveryService`（`memoryStores.js` in-memory store）與 `RecoveryDatabase`（需 `SCS_TEST_PG` 指向可建刪 `scs_rt_*` DB 的 PostgreSQL），`node --test test/backup/*.test.js` 覆蓋 `/downloadDb`；Client 以 `node --test test/fido/*.test.mjs` 覆蓋 `FidoProvider`（`fake_helper.mjs` 以同一 NDJSON 協定模擬 python helper）與 `RecoveryManager`，`FIDO_E2E=1` 時改用實體金鑰；`npm run test:classifier` 覆蓋智慧分類的模型搜尋順序（macOS 與 Windows）、下載／續傳／取消／校驗／匯入（本機 HTTP server），以及 `ClassifyService` 的回傳格式（macOS 情境比對修改前錄下的快照）。實機腳本另有 `client/scripts/admin_e2e.mjs`（管理員權限 10/10、降級一般使用者 7/7）與 `server/scripts/fido-e2e.mjs`（實體金鑰走完綁定與復原，store 全在記憶體）。但 `npm test` 仍指向 Jest（Server 沒裝 Jest、Client 的 `jest.config.js` 用未安裝的 ts-jest），TA `npm test` 固定失敗；上傳/下載/三種傳輸/ABSE/浮水印/批次流程仍沒有自動化測試。
 19. **存在 legacy/inert code paths。** 例如 Client 舊 download methods、本機 tag/attr SQLite no-op、未綁定的 `get-public-files`/部分 IPC、舊 classifier helper；維護時應以目前 UI → preload → main handler 的可達路徑為準。
 20. **註冊錯誤可能被誤報為成功。** `registerProcess()` 在 DB/root-folder 建立失敗後會 rollback，但 catch 沒有重新拋出，上層仍可能回傳 `{ userId }`。
 21. **Blockchain attribution/nonce 仍有缺口。** Upload verifier 尚未確認 `FileUploaded.uploader` 等於 pending user/address；Server write transactions 也沒有 nonce queue，並發交易可能取得相同 confirmed nonce。
@@ -930,7 +960,7 @@ Production code 固定到 `process.resourcesPath/agentApiKeys.json` 讀 key，�
 37. **工作樹 Client `default.yaml` 內含正式環境位址。** `server.host`/`trustedAuthority.url`（`211.73.82.228`）與鏈 RPC/合約已直接寫進會被打包的 `default.yaml`，換環境需重新打包；主機若只開 SSH，這些直連設定必須被 `local.yaml` 覆寫為 `localhost` 並走隧道，否則 Client 會等很久才報連不上。
 38. **智慧搜尋依賴 Ollama 可用性，失敗時靜默降級。** Ollama 連不上（隧道少開 11435、模型未載入、伺服器 GPU 忙碌）時 Agent 退回本機關鍵字搜尋，UI 沒有明確提示，只在 Client log 留下 `falling back`。
 39. **指紋復原的殘餘風險。** 碎片加密承襲密碼法的 HKDF 空 salt/固定 IV/無認證標籤 AES-CBC（FIDO 路徑 extraKey 有 256-bit 熵，不怕離線猜測）；extraKey 為 JS 字串無法確定性清除；綁定/復原狀態（`fidoBind`/`fidoRecover`/`recoverVerified`）全在 socket 記憶體，斷線即失效且無法水平擴充；未驗證 attestation/AAGUID，任何支援 hmac-secret 的 FIDO2 認證器皆可綁定；密碼法的 `secret-share` schema 只檢查字串陣列，不像 fido 路徑限制份數/大小。
-40. **智慧分類/搜尋有無入口的開關與死碼。** `classifier:set-enabled` 主開關沒有 UI 呼叫者（永遠 true）；重試分類不帶 mode 快照；`classifyResult.js`、`balanceZhLabelsFromRuns`、`classifier-llm-progress` 監聽等無人使用；Ollama 自動選模快取不會因模型被移除而失效。
+40. **智慧分類/搜尋有無入口的開關與死碼。** `classifier:set-enabled` 主開關沒有 UI 呼叫者（永遠 true）；重試分類不帶 mode 快照；`classifyResult.js`、`balanceZhLabelsFromRuns` 等無人使用（`classifier-llm-progress` 現在用於 Windows 模型下載與載入進度）；Ollama 自動選模快取不會因模型被移除而失效。
 
 ## 建議後續工作優先順序
 
@@ -940,7 +970,7 @@ Production code 固定到 `process.resourcesPath/agentApiKeys.json` 讀 key，�
 4. 決定 blockchain 是否為強制依賴；若允許 disabled mode，補齊 download/share 的非鏈路徑。
 5. 將 DB 版本管理改為正式 migrations，並讓 listener 在 schema/TA/chain readiness 完成後才接收流量。
 6. 把 `npm test` 改指向 `node --test` 並補上傳/下載/傳輸/ABSE/浮水印/批次流程的 unit/integration/E2E tests、pagination/quota 與 audit-log 查詢；compose 已有 health checks，缺的是對外監控與告警。
-7. 為 macOS/Windows 安裝檔加上正式簽章與 notarize，把 fido helper 打包成免安裝 Python 的執行檔，安全注入 Gemini key，Windows 版改為安裝後下載 Gemma 4 模型。
+7. 為 macOS/Windows 安裝檔加上正式簽章與 notarize，把 fido helper 打包成免安裝 Python 的執行檔，安全注入 Gemini key。
 
 ## 子專案既有文件
 

@@ -29,6 +29,7 @@ import BatchDownloadProgress from './BatchDownloadProgress'
 import toast from 'react-hot-toast'
 import { Validators } from './Validator'
 import PostUploadDialog from './PostUploadDialog'
+import ModelSetupDialogHost from './ModelSetupDialog'
 
 function MainView() {
   const [curPath, setCurPath] = useState([{ name: '', folderId: null }])
@@ -208,6 +209,8 @@ function MainView() {
           onClose={() => setUploadBatch(null)}
         />
       )}
+      {/* Windows only: smart-classify model download / import (renders nothing on macOS) */}
+      <ModelSetupDialogHost />
     </CurPathContext.Provider>
   )
 }

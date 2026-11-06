@@ -1,9 +1,13 @@
 /**
  * Classifier configuration (main process).
  *
- * Model path resolution (in order):
+ * Model path resolution lives in LlamaCppClient.getModelPath() →
+ * classifierModelLocator.js (in order):
  *   1. LLAMA_MODEL_PATH environment variable
- *   2. <userData>/models/model.gguf  (set by LlamaCppClient.getModelPath())
+ *   2. dev: <appPath>/resources/models/gemma-4-E4B-it-Q4_K_M.gguf
+ *      installed: <resourcesPath>/models/gemma-4-E4B-it-Q4_K_M.gguf
+ *   Windows installer: the model downloaded / imported by the Windows model
+ *   manager (%LOCALAPPDATA%\<app>\models) comes before <resourcesPath>/models.
  *
  * Threshold:
  *   - CLASSIFIER_THRESHOLD env var (0–1, default 0.55)
