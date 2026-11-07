@@ -17,6 +17,7 @@ import KeyManager from './KeyManager'
 import ABSEManager from './ABSEManager'
 import DatabaseManager from './DatabaseManager'
 import { registerClassifierIpcOnce } from './services/classifierIpcRegistration.js'
+import { registerClassifierModelIpcOnce } from './ipc/classifierModelIpc.js'
 import {
   registerUploadPostIpcOnce,
   setFileManagerForUploadPostIpc
@@ -249,6 +250,8 @@ app.whenReady().then(() => {
 
   // Smart-classify IPC: toggle state (classifier:set-enabled, classifier:set-upload-batch-smart-classify, …)
   registerClassifierIpcOnce()
+  // Windows only (no-op elsewhere): model download / import / cancel (classifier-model:*)
+  registerClassifierModelIpcOnce()
 
   // Post-upload IPC: classify-documents, preupload-classify-snapshot,
   // file-manager:start-upload, file-manager:refresh-list, ask-batch-update-file-desc-perm

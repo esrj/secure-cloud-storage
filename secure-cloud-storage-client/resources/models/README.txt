@@ -11,3 +11,9 @@ from that repo are NOT needed. The former Qwen3.5-4B / 9B tiers were
 removed. Only gemma-4-E4B-it-Q4_K_M.gguf is copied into the packaged app
 (see electron-builder.yml -> extraResources); any other .gguf left in this
 folder is ignored by the build and can be deleted.
+
+Windows installers never contain the model (NSIS caps one installer at about
+2 GB): electron-builder.win.cjs drops it, and the installed app downloads or
+imports it into %LOCALAPPDATA%\client-side\models the first time smart
+classify is switched on. The pinned revision, size and SHA-256 are in
+src/main/services/classifierModelManifest.js.

@@ -1,0 +1,866 @@
+{
+  "disabled": {
+    "supported": false,
+    "reason": "DISABLED",
+    "labels": [],
+    "final_labels": []
+  },
+  "modeOff": {
+    "supported": false,
+    "reason": "DISABLED",
+    "labels": [],
+    "final_labels": []
+  },
+  "noFiles": {
+    "supported": false,
+    "reason": "NO_FILES",
+    "labels": [],
+    "final_labels": [],
+    "extraction": {
+      "attempted": false
+    }
+  },
+  "success": {
+    "supported": true,
+    "labels": [
+      {
+        "name": "海軍",
+        "score": 0.91,
+        "evidence": [
+          "檔案 1：海軍艦隊"
+        ]
+      },
+      {
+        "name": "陸軍",
+        "score": 0.1,
+        "evidence": []
+      },
+      {
+        "name": "空軍",
+        "score": 0.05,
+        "evidence": []
+      },
+      {
+        "name": "聯合作戰",
+        "score": 0.2,
+        "evidence": []
+      },
+      {
+        "name": "演訓戰備",
+        "score": 0.6,
+        "evidence": [
+          "檔案 1：遠洋航行訓練"
+        ]
+      },
+      {
+        "name": "其他",
+        "score": 0.02,
+        "evidence": []
+      }
+    ],
+    "final_labels": [
+      "海軍",
+      "演訓戰備"
+    ],
+    "classification": {
+      "labels": [
+        {
+          "name": "海軍",
+          "score": 0.91,
+          "evidence": [
+            "檔案 1：海軍艦隊"
+          ]
+        },
+        {
+          "name": "陸軍",
+          "score": 0.1,
+          "evidence": []
+        },
+        {
+          "name": "空軍",
+          "score": 0.05,
+          "evidence": []
+        },
+        {
+          "name": "聯合作戰",
+          "score": 0.2,
+          "evidence": []
+        },
+        {
+          "name": "演訓戰備",
+          "score": 0.6,
+          "evidence": [
+            "檔案 1：遠洋航行訓練"
+          ]
+        },
+        {
+          "name": "其他",
+          "score": 0.02,
+          "evidence": []
+        }
+      ],
+      "final_labels": [
+        "海軍",
+        "演訓戰備"
+      ]
+    },
+    "extraction": {
+      "attempted": true,
+      "ok": true,
+      "filesCount": 1,
+      "filesWithText": 1,
+      "files": [
+        {
+          "path": "C:/docs/海軍任務日誌.txt",
+          "name": "海軍任務日誌.txt",
+          "charLen": 31,
+          "extracted": true
+        }
+      ],
+      "groups": 1,
+      "chunksClassified": 1,
+      "parseSuccessRuns": 1
+    },
+    "thresholdUsed": 0.55
+  },
+  "legacyModeSuccess": {
+    "supported": true,
+    "labels": [
+      {
+        "name": "海軍",
+        "score": 0.91,
+        "evidence": [
+          "檔案 1：海軍艦隊"
+        ]
+      },
+      {
+        "name": "陸軍",
+        "score": 0.1,
+        "evidence": []
+      },
+      {
+        "name": "空軍",
+        "score": 0.05,
+        "evidence": []
+      },
+      {
+        "name": "聯合作戰",
+        "score": 0.2,
+        "evidence": []
+      },
+      {
+        "name": "演訓戰備",
+        "score": 0.6,
+        "evidence": [
+          "檔案 1：遠洋航行訓練"
+        ]
+      },
+      {
+        "name": "其他",
+        "score": 0.02,
+        "evidence": []
+      }
+    ],
+    "final_labels": [
+      "海軍",
+      "演訓戰備"
+    ],
+    "classification": {
+      "labels": [
+        {
+          "name": "海軍",
+          "score": 0.91,
+          "evidence": [
+            "檔案 1：海軍艦隊"
+          ]
+        },
+        {
+          "name": "陸軍",
+          "score": 0.1,
+          "evidence": []
+        },
+        {
+          "name": "空軍",
+          "score": 0.05,
+          "evidence": []
+        },
+        {
+          "name": "聯合作戰",
+          "score": 0.2,
+          "evidence": []
+        },
+        {
+          "name": "演訓戰備",
+          "score": 0.6,
+          "evidence": [
+            "檔案 1：遠洋航行訓練"
+          ]
+        },
+        {
+          "name": "其他",
+          "score": 0.02,
+          "evidence": []
+        }
+      ],
+      "final_labels": [
+        "海軍",
+        "演訓戰備"
+      ]
+    },
+    "extraction": {
+      "attempted": true,
+      "ok": true,
+      "filesCount": 1,
+      "filesWithText": 1,
+      "files": [
+        {
+          "path": "C:/docs/海軍任務日誌.txt",
+          "name": "海軍任務日誌.txt",
+          "charLen": 31,
+          "extracted": true
+        }
+      ],
+      "groups": 1,
+      "chunksClassified": 1,
+      "parseSuccessRuns": 1
+    },
+    "thresholdUsed": 0.55
+  },
+  "modelMissing": {
+    "result": {
+      "supported": false,
+      "reason": "LLM_GENERATE_FAILED",
+      "labels": [],
+      "final_labels": [],
+      "extraction": {
+        "attempted": true,
+        "ok": true,
+        "filesCount": 20,
+        "filesWithText": 20,
+        "files": [
+          {
+            "path": "C:/docs/報告-1.txt",
+            "name": "報告-1.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-2.txt",
+            "name": "報告-2.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-3.txt",
+            "name": "報告-3.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-4.txt",
+            "name": "報告-4.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-5.txt",
+            "name": "報告-5.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-6.txt",
+            "name": "報告-6.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-7.txt",
+            "name": "報告-7.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-8.txt",
+            "name": "報告-8.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-9.txt",
+            "name": "報告-9.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-10.txt",
+            "name": "報告-10.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-11.txt",
+            "name": "報告-11.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-12.txt",
+            "name": "報告-12.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-13.txt",
+            "name": "報告-13.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-14.txt",
+            "name": "報告-14.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-15.txt",
+            "name": "報告-15.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-16.txt",
+            "name": "報告-16.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-17.txt",
+            "name": "報告-17.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-18.txt",
+            "name": "報告-18.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-19.txt",
+            "name": "報告-19.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-20.txt",
+            "name": "報告-20.txt",
+            "charLen": 19,
+            "extracted": true
+          }
+        ]
+      },
+      "llmError": "LLM model not found.\nExpected: \"C:\\app\\resources\\models\\gemma-4-E4B-it-Q4_K_M.gguf\"\nPlace gemma-4-E4B-it-Q4_K_M.gguf inside resources/models/ or set the LLAMA_MODEL_PATH environment variable.",
+      "thresholdUsed": 0.55
+    },
+    "generateCalls": 2
+  },
+  "timeout": {
+    "supported": false,
+    "reason": "LLM_GENERATE_FAILED",
+    "labels": [],
+    "final_labels": [],
+    "extraction": {
+      "attempted": true,
+      "ok": true,
+      "filesCount": 1,
+      "filesWithText": 1,
+      "files": [
+        {
+          "path": "C:/docs/海軍任務日誌.txt",
+          "name": "海軍任務日誌.txt",
+          "charLen": 31,
+          "extracted": true
+        }
+      ]
+    },
+    "llmError": "LLM generation timed out after 90000ms (mode=\"fast\")",
+    "thresholdUsed": 0.55
+  },
+  "jsonParseFailed": {
+    "supported": false,
+    "reason": "JSON_PARSE_FAILED",
+    "labels": [],
+    "final_labels": [],
+    "extraction": {
+      "attempted": true,
+      "ok": true,
+      "filesCount": 1,
+      "filesWithText": 1,
+      "files": [
+        {
+          "path": "C:/docs/海軍任務日誌.txt",
+          "name": "海軍任務日誌.txt",
+          "charLen": 31,
+          "extracted": true
+        }
+      ]
+    },
+    "llmRawText": "not json at all",
+    "thresholdUsed": 0.55
+  },
+  "firstGroupFailsSecondOk": {
+    "result": {
+      "supported": true,
+      "labels": [
+        {
+          "name": "海軍",
+          "score": 0.91,
+          "evidence": [
+            "檔案 1：海軍艦隊"
+          ]
+        },
+        {
+          "name": "陸軍",
+          "score": 0.1,
+          "evidence": []
+        },
+        {
+          "name": "空軍",
+          "score": 0.05,
+          "evidence": []
+        },
+        {
+          "name": "聯合作戰",
+          "score": 0.2,
+          "evidence": []
+        },
+        {
+          "name": "演訓戰備",
+          "score": 0.6,
+          "evidence": [
+            "檔案 1：遠洋航行訓練"
+          ]
+        },
+        {
+          "name": "其他",
+          "score": 0.02,
+          "evidence": []
+        }
+      ],
+      "final_labels": [
+        "海軍",
+        "演訓戰備"
+      ],
+      "classification": {
+        "labels": [
+          {
+            "name": "海軍",
+            "score": 0.91,
+            "evidence": [
+              "檔案 1：海軍艦隊"
+            ]
+          },
+          {
+            "name": "陸軍",
+            "score": 0.1,
+            "evidence": []
+          },
+          {
+            "name": "空軍",
+            "score": 0.05,
+            "evidence": []
+          },
+          {
+            "name": "聯合作戰",
+            "score": 0.2,
+            "evidence": []
+          },
+          {
+            "name": "演訓戰備",
+            "score": 0.6,
+            "evidence": [
+              "檔案 1：遠洋航行訓練"
+            ]
+          },
+          {
+            "name": "其他",
+            "score": 0.02,
+            "evidence": []
+          }
+        ],
+        "final_labels": [
+          "海軍",
+          "演訓戰備"
+        ]
+      },
+      "extraction": {
+        "attempted": true,
+        "ok": true,
+        "filesCount": 20,
+        "filesWithText": 20,
+        "files": [
+          {
+            "path": "C:/docs/報告-1.txt",
+            "name": "報告-1.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-2.txt",
+            "name": "報告-2.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-3.txt",
+            "name": "報告-3.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-4.txt",
+            "name": "報告-4.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-5.txt",
+            "name": "報告-5.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-6.txt",
+            "name": "報告-6.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-7.txt",
+            "name": "報告-7.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-8.txt",
+            "name": "報告-8.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-9.txt",
+            "name": "報告-9.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-10.txt",
+            "name": "報告-10.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-11.txt",
+            "name": "報告-11.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-12.txt",
+            "name": "報告-12.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-13.txt",
+            "name": "報告-13.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-14.txt",
+            "name": "報告-14.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-15.txt",
+            "name": "報告-15.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-16.txt",
+            "name": "報告-16.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-17.txt",
+            "name": "報告-17.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-18.txt",
+            "name": "報告-18.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-19.txt",
+            "name": "報告-19.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-20.txt",
+            "name": "報告-20.txt",
+            "charLen": 19,
+            "extracted": true
+          }
+        ],
+        "groups": 2,
+        "chunksClassified": 1,
+        "parseSuccessRuns": 1
+      },
+      "thresholdUsed": 0.55
+    },
+    "generateCalls": 2
+  },
+  "progressAndDebug": {
+    "result": {
+      "supported": true,
+      "labels": [
+        {
+          "name": "海軍",
+          "score": 0.91,
+          "evidence": [
+            "檔案 1：海軍艦隊"
+          ]
+        },
+        {
+          "name": "陸軍",
+          "score": 0.1,
+          "evidence": []
+        },
+        {
+          "name": "空軍",
+          "score": 0.05,
+          "evidence": []
+        },
+        {
+          "name": "聯合作戰",
+          "score": 0.2,
+          "evidence": []
+        },
+        {
+          "name": "演訓戰備",
+          "score": 0.6,
+          "evidence": [
+            "檔案 1：遠洋航行訓練"
+          ]
+        },
+        {
+          "name": "其他",
+          "score": 0.02,
+          "evidence": []
+        }
+      ],
+      "final_labels": [
+        "海軍",
+        "演訓戰備"
+      ],
+      "classification": {
+        "labels": [
+          {
+            "name": "海軍",
+            "score": 0.91,
+            "evidence": [
+              "檔案 1：海軍艦隊"
+            ]
+          },
+          {
+            "name": "陸軍",
+            "score": 0.1,
+            "evidence": []
+          },
+          {
+            "name": "空軍",
+            "score": 0.05,
+            "evidence": []
+          },
+          {
+            "name": "聯合作戰",
+            "score": 0.2,
+            "evidence": []
+          },
+          {
+            "name": "演訓戰備",
+            "score": 0.6,
+            "evidence": [
+              "檔案 1：遠洋航行訓練"
+            ]
+          },
+          {
+            "name": "其他",
+            "score": 0.02,
+            "evidence": []
+          }
+        ],
+        "final_labels": [
+          "海軍",
+          "演訓戰備"
+        ]
+      },
+      "extraction": {
+        "attempted": true,
+        "ok": true,
+        "filesCount": 20,
+        "filesWithText": 20,
+        "files": [
+          {
+            "path": "C:/docs/報告-1.txt",
+            "name": "報告-1.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-2.txt",
+            "name": "報告-2.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-3.txt",
+            "name": "報告-3.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-4.txt",
+            "name": "報告-4.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-5.txt",
+            "name": "報告-5.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-6.txt",
+            "name": "報告-6.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-7.txt",
+            "name": "報告-7.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-8.txt",
+            "name": "報告-8.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-9.txt",
+            "name": "報告-9.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-10.txt",
+            "name": "報告-10.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-11.txt",
+            "name": "報告-11.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-12.txt",
+            "name": "報告-12.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-13.txt",
+            "name": "報告-13.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-14.txt",
+            "name": "報告-14.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-15.txt",
+            "name": "報告-15.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-16.txt",
+            "name": "報告-16.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-17.txt",
+            "name": "報告-17.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-18.txt",
+            "name": "報告-18.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-19.txt",
+            "name": "報告-19.txt",
+            "charLen": 19,
+            "extracted": true
+          },
+          {
+            "path": "C:/docs/報告-20.txt",
+            "name": "報告-20.txt",
+            "charLen": 19,
+            "extracted": true
+          }
+        ],
+        "groups": 2,
+        "chunksClassified": 2,
+        "parseSuccessRuns": 2
+      },
+      "llmRawText": "{\"labels\":[{\"name\":\"海軍\",\"score\":0.91,\"evidence\":[\"檔案 1：海軍艦隊\"]},{\"name\":\"陸軍\",\"score\":0.1,\"evidence\":[]},{\"name\":\"空軍\",\"score\":0.05,\"evidence\":[]},{\"name\":\"聯合作戰\",\"score\":0.2,\"evidence\":[]},{\"name\":\"演訓戰備\",\"score\":0.6,\"evidence\":[\"檔案 1：遠洋航行訓練\"]},{\"name\":\"其他\",\"score\":0.02,\"evidence\":[]}],\"final_labels\":[\"海軍\",\"演訓戰備\"]}",
+      "thresholdUsed": 0.4
+    },
+    "progress": [
+      {
+        "done": 0,
+        "total": 2
+      },
+      {
+        "done": 1,
+        "total": 2
+      },
+      {
+        "done": 2,
+        "total": 2
+      }
+    ]
+  }
+}
