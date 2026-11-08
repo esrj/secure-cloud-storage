@@ -11,3 +11,16 @@ deploy/
 
 # 併入前 client 獨立 repo 的本機備份
 .git-backup/
+
+# 文件只推 README.md，其他 .md 都留在本機
+*.md
+!README.md
+
+# Word、PDF、簡報、試算表等文件也都不推
+*.doc
+*.docx
+*.pdf
+*.ppt
+*.pptx
+*.xls
+*.xlsx
