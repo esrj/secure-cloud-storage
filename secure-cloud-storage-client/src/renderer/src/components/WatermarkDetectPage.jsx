@@ -151,10 +151,20 @@ function WatermarkDetectPage() {
 
       {/* ── Drop zone ── */}
       <div
+        role="button"
+        tabIndex={0}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={() => !file && inputRef.current?.click()}
+        onKeyDown={(e) => {
+          // Keyboard equivalent of onClick; ignore keys bubbling up from children.
+          if (e.target !== e.currentTarget) return
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            if (!file) inputRef.current?.click()
+          }
+        }}
         className={`
           border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-3
           py-10 transition-colors cursor-pointer select-none
