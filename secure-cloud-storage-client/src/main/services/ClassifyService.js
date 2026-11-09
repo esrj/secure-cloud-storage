@@ -110,11 +110,12 @@ const MAX_FILENAME_CHARS = 120
  * @param {string} text
  * @returns {string}
  */
-function sanitizeBodyForPrompt(text) {
+export function sanitizeBodyForPrompt(text) {
   if (typeof text !== 'string' || text.length === 0) return ''
   return text
-    // Strip control chars except \n (0x0A) and \t (0x09).
-    .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, ' ')
+    // Strip control chars (Unicode category Cc = U+0000–U+001F, U+007F–U+009F)
+    // except \n (0x0A) and \t (0x09).
+    .replace(/(?![\t\n])\p{Cc}/gu, ' ')
     // Defang our framing markers if they appear at the start of a line.
     .replace(/^(\s*)#\s*檔案/gm, '$1＃ 檔案')
     .replace(/^(\s*)-{3,}(\s*)$/gm, '$1—（分隔）$2')
@@ -126,9 +127,9 @@ function sanitizeBodyForPrompt(text) {
  * @param {string} name
  * @returns {string}
  */
-function sanitizeFilenameForPrompt(name) {
+export function sanitizeFilenameForPrompt(name) {
   const oneLine = String(name || '')
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+    .replace(/\p{Cc}/gu, ' ')
     .replace(/[#`]/g, '＃')
     .replace(/-{3,}/g, '—')
     .replace(/\s+/g, ' ')
