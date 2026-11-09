@@ -136,7 +136,7 @@ io.on("connection", (socket) => {
         return;
       }
       const { decryptedValue, y } = result.data; // y is the attribute array
-      if (y && y.length() != TA.arrayParamLength) {
+      if (y && y.length != TA.arrayParamLength) {
         cb({ errorMsg: InvalidArgumentErrorMsg });
         return;
       }
