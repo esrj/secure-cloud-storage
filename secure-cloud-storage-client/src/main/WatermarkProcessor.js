@@ -292,7 +292,7 @@ export async function applyInvisibleWatermark(inputBuffer, mimeType, opts) {
   logger.info(`[WatermarkProcessor] Applying invisible watermark: mime=${mimeType}`)
   if (mimeType === 'application/pdf') return _invisiblePDF(inputBuffer, opts)
   if (mimeType === 'image/png') return _lsbPNG(inputBuffer, opts)
-  if (mimeType === 'image/jpeg') return _lsbJPEG(inputBuffer, opts)
+  if (mimeType === 'image/jpeg') return _lsbJPEG(inputBuffer)
   if (mimeType === DOCX_MIME) return _invisibleDocx(inputBuffer, opts)
   if (mimeType === TXT_MIME) return _invisibleTxt(inputBuffer, opts)
   throw new Error('WATERMARK_UNSUPPORTED_FORMAT')
