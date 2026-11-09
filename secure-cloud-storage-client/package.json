@@ -12,6 +12,7 @@
     "dev": "electron-vite dev",
     "test": "jest",
     "test:classifier": "node --test --experimental-test-module-mocks test/classifier/*.test.mjs",
+    "test:download": "node --test test/download/*.test.mjs",
     "build": "electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",

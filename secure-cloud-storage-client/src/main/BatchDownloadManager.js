@@ -9,8 +9,11 @@
  *   events for live updates.
  * - For each file we ask FileManager for the verification meta (server +
  *   blockchain), then pick the appropriate write helper (original vs watermark).
- * - Filename collisions in the destination directory are resolved by appending
- *   `(2)`, `(3)`, … before the extension.
+ * - The output name is derived from the server-supplied name, which is
+ *   untrusted (it comes from the uploader): only its last path segment is
+ *   kept, so the file always lands inside the chosen folder. Collisions are
+ *   resolved by appending `(2)`, `(3)`, … before the extension
+ *   (see ./batchOutputPath.js).
  * - The cancel flag is checked between files; the currently running file is
  *   allowed to finish (interrupting the stream half-way would leave a partial
  *   file on disk, and v1 prefers correctness over speed of cancellation).
@@ -19,12 +22,11 @@
  * watermark application are CPU-bound enough that running them in parallel
  * has no real benefit and amplifies user-visible jank.
  */
-import { extname, basename, join } from 'node:path'
-import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { logger } from './Logger'
 import GlobalValueManager from './GlobalValueManager'
 import { isWatermarkSupported } from './WatermarkProcessor'
+import { resolveUniquePath } from './batchOutputPath'
 
 // Concurrency note: the inner `_run` loop is intentionally sequential. Both
 // blockchain verification and PDF watermark application are CPU-bound enough
@@ -205,22 +207,11 @@ class BatchDownloadManager {
   }
 
   /**
-   * Walk `destDir/name`, `destDir/name (2)`, `destDir/name (3)`, … until we
-   * find a non-existent path. existsSync is best-effort against parallel
-   * batches but is fine for v1's single-window assumption.
+   * `destDir/<safe name>`, with `(2)`, `(3)`, … on collision. The name is
+   * sanitised first because it comes from the server; see batchOutputPath.js.
    */
   _resolveUniquePath(destDir, name) {
-    const candidate = join(destDir, name)
-    if (!existsSync(candidate)) return candidate
-
-    const ext = extname(name)
-    const stem = basename(name, ext)
-    for (let n = 2; n < 10_000; n++) {
-      const p = join(destDir, `${stem} (${n})${ext}`)
-      if (!existsSync(p)) return p
-    }
-    // Astronomically unlikely fallback — append timestamp
-    return join(destDir, `${stem}-${Date.now()}${ext}`)
+    return resolveUniquePath(destDir, name)
   }
 
   _emit(payload) {
