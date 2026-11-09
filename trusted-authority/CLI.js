@@ -367,7 +367,6 @@ async function userActions() {
           break;
         case "return":
           return;
-          break;
       }
     } catch (error) {
       handleCtrlCError(error);
