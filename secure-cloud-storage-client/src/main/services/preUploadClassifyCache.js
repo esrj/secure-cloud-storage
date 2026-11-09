@@ -38,11 +38,24 @@ function evictIfNeeded() {
 }
 
 /**
+ * Same order as Array.prototype.sort() without a compare function (UTF-16 code
+ * units), written out so the cache key is explicit and never locale-dependent.
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+export function compareCodeUnits(a, b) {
+  if (a < b) return -1
+  if (a > b) return 1
+  return 0
+}
+
+/**
  * Stable id for this picker session (same paths set → same key for upload batch + LM cache).
  * @param {string[]} paths
  */
 export function makeUploadBatchClassifyKey(paths) {
-  const sorted = [...paths].filter((p) => typeof p === 'string' && p.trim()).sort()
+  const sorted = [...paths].filter((p) => typeof p === 'string' && p.trim()).sort(compareCodeUnits)
   return createHash('sha256').update(sorted.join('\0'), 'utf8').digest('hex').slice(0, 32)
 }
 
