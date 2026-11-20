@@ -6,6 +6,12 @@ sonarqube/
 sonar-project.properties
 .scannerwork/
 
+# SBOM 與授權稽核工具、產出
+/sbom/
+
+# 根目錄的打包、通道等本機腳本（client/、server/ 底下的 scripts/ 仍要推）
+/scripts/
+
 # 單機 Docker 部署（Server + TA + PostgreSQL + Ollama）
 deploy/
 
