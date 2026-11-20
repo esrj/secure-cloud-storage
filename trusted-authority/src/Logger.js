@@ -3,11 +3,13 @@
  */
 import winston, { format } from 'winston'
 import 'winston-daily-rotate-file'
+import { redactSensitive } from './LogRedaction.js'
 
 export const logger = winston.createLogger({
   level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
   format: winston.format.combine(
     format.errors({ stack: true }),
+    redactSensitive(), // after errors(), so fields copied from an Error are masked too
     format.timestamp(/*{ format: timezoned }*/),
     format.json()
   ),

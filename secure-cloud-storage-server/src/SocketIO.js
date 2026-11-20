@@ -2,6 +2,7 @@
  * This file handles express server and socketio initializations.
  */
 import express from 'express'
+import helmet from 'helmet'
 // Servers
 import { Server } from 'socket.io'
 // Logger
@@ -19,7 +20,10 @@ import { readFileSync } from 'node:fs'
 import { userLogout } from './UserLoginInfo.js'
 
 const app = express()
-app.set('trust proxy', true)
+// 'trust proxy' stays at its default (off): clients reach this port directly, there is no
+// reverse proxy in front, so X-Forwarded-For is whatever the caller chose to send.
+// Security headers on every HTTPS response; this also removes X-Powered-By.
+app.use(helmet())
 logger.info(`Express app created.`)
 
 const options = {
@@ -34,11 +38,9 @@ server.listen(ConfigManager.httpsPort, () => {
   logger.info(`Server is running on port ${ConfigManager.httpsPort}`)
 })
 
-const io = new Server(server, {
-  cors: {
-    origin: '*'
-  }
-})
+// No CORS headers: every client is a Node process (the Electron main process, the trusted
+// authority), which CORS does not apply to, and no web page should be calling this server.
+const io = new Server(server)
 
 // Client connects
 io.on('connection', (socket) => {
@@ -52,7 +54,7 @@ io.on('connection', (socket) => {
   logSocketInfo(socket, 'Client connected.')
 
   socket.on('message', (message) => {
-    logger.info(socket, 'Received message.', { message })
+    logSocketInfo(socket, 'Received message.', { message })
     socket.emit('message', message + ' received by server.')
   })
 

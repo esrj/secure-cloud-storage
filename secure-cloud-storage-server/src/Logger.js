@@ -4,6 +4,7 @@
 import winston, { format } from 'winston'
 import Transport from 'winston-transport'
 import http from 'node:http'
+import { redactSensitive } from './LogRedaction.js'
 
 const SOCKET_PATH = '/tmp/log.sock'
 const url = `http://unix:${SOCKET_PATH}:/logs`
@@ -64,7 +65,12 @@ class RemoteTransport extends Transport {
 // create logger with format and transport
 export const logger = winston.createLogger({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  format: winston.format.combine(format.errors({ stack: true }), format.timestamp(), format.json()),
+  format: winston.format.combine(
+    format.errors({ stack: true }),
+    redactSensitive(), // after errors(), so fields copied from an Error are masked too
+    format.timestamp(),
+    format.json()
+  ),
   transports: [
     process.env.IS_CLI ? new RemoteTransport({ url }) : new winston.transports.Console({})
   ]

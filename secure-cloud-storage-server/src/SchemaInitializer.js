@@ -266,7 +266,8 @@ function manualSetupHint(mainCfg, shareConfigs) {
   const uniqueDbs = [...new Set(dbs)]
   const lines = [
     `-- Run these as a PostgreSQL superuser (e.g. psql -U postgres):`,
-    `CREATE ROLE "${mainCfg.user}" WITH LOGIN PASSWORD '${mainCfg.password}';`,
+    // The hint ends up in the log, so it names the setting instead of printing the password.
+    `CREATE ROLE "${mainCfg.user}" WITH LOGIN PASSWORD '<database.password from the config>';`,
     ...uniqueDbs.map((db) => `CREATE DATABASE "${db}" OWNER "${mainCfg.user}";`),
   ]
   return lines.join('\n  ')

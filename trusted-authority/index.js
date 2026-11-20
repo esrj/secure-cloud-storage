@@ -6,7 +6,7 @@
 import './src/EnvInjection.js'
 
 import express from "express";
-import cors from 'cors'
+import helmet from "helmet";
 import { Server } from "socket.io";
 import {
   logger,
@@ -35,8 +35,10 @@ const CERT_PATH = process.env.CERT_PATH || "data/tls.crt";
 
 // Create an express server
 const app = express();
-app.set(`trust proxy`, true);
-app.use(cors())
+// 'trust proxy' stays at its default (off): clients reach this port directly, there is no
+// reverse proxy in front, so X-Forwarded-For is whatever the caller chose to send.
+// Security headers on every HTTPS response; this also removes X-Powered-By.
+app.use(helmet());
 
 const options = {
   key: readFileSync(KEY_PATH),
@@ -49,11 +51,9 @@ const server = createServer(options, app);
 const TA = new TrustedAuthority();
 await TA.init();
 
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
-});
+// No CORS headers: every client is a Node process (the Electron main process, the cloud
+// server), which CORS does not apply to, and no web page should be calling this service.
+const io = new Server(server);
 
 io.on("connection", (socket) => {
   socket.ip = socket.handshake.address;
@@ -122,7 +122,8 @@ io.on("connection", (socket) => {
   socket.on("auth-res", async (request, cb) => {
     try {
       const actionStr = "Client responds to authentication";
-      logSocketInfo(socket, actionStr + ".", request);
+      // The answer to the challenge is not logged.
+      logSocketInfo(socket, actionStr + ".", { ...request, decryptedValue: undefined });
 
       const result = AuthResRequestSchema.safeParse(request);
       if (!result.success) {
@@ -142,13 +143,10 @@ io.on("connection", (socket) => {
       }
 
       if (socket.randKey !== decryptedValue) {
+        // Neither the answer nor the expected value is logged: the challenge is still open.
         logSocketWarning(
           socket,
-          actionStr + " with incorrect authentication key.",
-          {
-            ...request,
-            randKey: socket.randKey,
-          }
+          actionStr + " with incorrect authentication key."
         );
         if (socket.userId) addFailure(socket.userId);
         cb({ errorMsg: "Incorrect authentication key." });

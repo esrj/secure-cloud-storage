@@ -199,10 +199,8 @@ const authenticationBinder = (socket) => {
       }
 
       if (socket.randKey !== decryptedValue) {
-        logSocketWarning(socket, actionStr + ' with incorrect authentication key.', {
-          ...request,
-          randKey: socket.randKey
-        })
+        // Neither the answer nor the expected value is logged: the challenge is still open.
+        logSocketWarning(socket, actionStr + ' with incorrect authentication key.')
         if (socket.userId) userLoginFailure(socket.userId)
         cb({ errorMsg: 'Incorrect authentication key.' })
         return
@@ -341,10 +339,8 @@ const authenticationBinder = (socket) => {
       }
 
       if (emailAuth !== socket.emailAuth && ConfigManager.smtp.enabled) {
-        logSocketWarning(socket, actionStr + ' but the response did not match.', {
-          emailAuth,
-          socketEmailAuth: socket.emailAuth
-        })
+        // Neither code is logged: the one that was sent is still valid for another try.
+        logSocketWarning(socket, actionStr + ' but the response did not match.')
         cb({ errorMsg: EmailAuthNotMatchErrorMsg })
         return
       }
