@@ -26,8 +26,8 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@heroicons/react": "^2.2.0",
     "@material-tailwind/react": "^2.1.10",
-    "basic-ftp": "^5.0.5",
-    "better-sqlite3": "^12.4.6",
+    "basic-ftp": "^6.2.6",
+    "better-sqlite3": "^12.11.1",
     "concurrent-queue": "^7.0.2",
     "config": "^4.1.1",
     "ethers": "^6.15.0",
@@ -58,7 +58,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.22",
     "babel-plugin-transform-import-meta": "^2.3.3",
-    "electron": "^39.2.3",
+    "electron": "^43.8.11",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.1",
     "eslint": "^9.39.1",
@@ -70,5 +70,14 @@
     "tailwindcss": "^3.4.13",
     "vite": "^7.2.4",
     "vite-plugin-static-copy": "^3.1.4"
+  },
+  "overrides": {
+    "zod": "^4.6.6",
+    "app-builder-lib": {
+      "minimatch": "^11.0.1"
+    },
+    "@electron/universal": {
+      "minimatch": "^11.0.1"
+    }
   }
 }
