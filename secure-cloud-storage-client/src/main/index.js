@@ -30,6 +30,7 @@ import {
 import { registerAdminIpcOnce } from './ipc/adminIpc.js'
 import { registerRecoveryIpcOnce } from './ipc/recoveryIpc.js'
 import BatchDownloadManager from './BatchDownloadManager'
+import { isSafeExternalUrl } from './externalUrl'
 
 // Initilize class instances
 const keyManager = new KeyManager()
@@ -97,7 +98,12 @@ function createWindow() {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Only web links go to the OS; see externalUrl.js. Nothing opens inside the app either way.
+    if (isSafeExternalUrl(details.url)) {
+      shell.openExternal(details.url)
+    } else {
+      logger.warn('Blocked a link with a scheme that is not allowed to open externally.')
+    }
     return { action: 'deny' }
   })
 

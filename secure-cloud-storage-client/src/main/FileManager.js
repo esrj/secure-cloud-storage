@@ -1300,7 +1300,7 @@ class FileManager {
     const mimeType = watermarkOptions?.mimeType ?? getMimeFromFilename(meta.name)
     const tempPath = resolve(
       GlobalValueManager.tempPath,
-      `${meta.id}_wmbatch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      `${meta.id}_wmbatch_${Date.now()}_${randomUUID()}`
     )
 
     try {
