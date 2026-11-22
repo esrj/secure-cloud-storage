@@ -114,8 +114,10 @@ export const BLOCKED_MIME_TYPES = [...CATEGORY_OF_MIME.keys()]
  * @returns {string} '' when the name has no extension
  */
 export function extensionOf(filePath) {
-  const name = basename(String(filePath)).replace(/[. ]+$/, '')
-  return extname(name).slice(1).toLowerCase()
+  const name = basename(String(filePath))
+  let end = name.length
+  while (end > 0 && (name[end - 1] === '.' || name[end - 1] === ' ')) end--
+  return extname(name.slice(0, end)).slice(1).toLowerCase()
 }
 
 /**
