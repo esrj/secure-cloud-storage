@@ -34,6 +34,7 @@ import {
   TryAgainMsg
 } from './Utils'
 import { downloadFileProcessSftp, uploadFileProcessSftp } from './SftpFileProcess'
+import { partitionUploads } from './uploadTypeGuard.js'
 import ABSEManager from './ABSEManager'
 import DatabaseManager from './DatabaseManager'
 import {
@@ -437,9 +438,23 @@ class FileManager {
    */
   async uploadFileProcess(parentFolderId) {
     logger.info('Browsing file...')
-    const { filePaths } = await dialog.showOpenDialog({
+    const { filePaths: pickedPaths } = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections']
     })
+    if (pickedPaths.length === 0) {
+      GlobalValueManager.sendNotice('File upload canceled.', 'error')
+      return
+    }
+
+    // Risky file types are refused here, before the batch is created. Files are encrypted before
+    // they are sent, so the server only receives ciphertext and this is the one place where the
+    // type of a file can still be checked. A refused file never enters the batch.
+    const { allowed: filePaths, refused } = await partitionUploads(pickedPaths)
+    for (const { reason } of refused) {
+      logger.warn(`Upload refused: ${reason}`)
+      GlobalValueManager.sendNotice(`Failed to upload file: ${reason}`, 'error')
+    }
+
     if (filePaths.length > 0) {
       const classifierWanted = getUploadBatchSmartClassifyWanted()
       const classifierEnabled = getAppClassifierEnabled()
@@ -475,8 +490,6 @@ class FileManager {
       for (const filePath of filePaths) {
         this.uploadQueue({ filePath, parentFolderId, batchId })
       }
-    } else {
-      GlobalValueManager.sendNotice('File upload canceled.', 'error')
     }
   }
 
