@@ -12,7 +12,7 @@
 import { ipcMain } from 'electron'
 import { buildSearchableMetadata } from '../services/MetadataCollector.js'
 import { runAgentTurn } from '../services/AgentService.js'
-import { resolveProvider } from '../services/LlmClient.js'
+import { llmGenerateContent, LLM_PROVIDER } from '../services/LlmClient.js'
 import { logger } from '../Logger.js'
 import { emitWithAck } from './adminIpc.js'
 
@@ -70,25 +70,20 @@ export function registerAgentIpcOnce() {
     try {
       logger.info(`[AgentIpc] agent:query — "${userMessage.slice(0, 80)}"`)
 
-      // Local provider (ollama): metadata never leaves this machine, so the
-      // user's own private files are searchable too. Cloud provider (gemini):
-      // only public files (perm === 1) — private metadata is never sent out.
-      const provider = resolveProvider()
-      const searchable =
-        provider === 'gemini'
-          ? rawFiles.filter((f) => (f.perm ?? f.permissions ?? 0) === 1)
-          : rawFiles
-      logger.debug(
-        `[AgentIpc] provider=${provider}, total=${rawFiles.length}, searchable=${searchable.length}`
-      )
-
-      const files = buildSearchableMetadata(searchable, _databaseManager, {
+      // The LLM runs on the Cloud Server, which is also where this metadata came from
+      // (agent:file-scope), so the user's own private files are searchable too.
+      const files = buildSearchableMetadata(rawFiles, _databaseManager, {
         uploaderName,
         folders,
         currentUserId
       })
-      const result = await runAgentTurn({ userMessage, history, files })
-      return { ok: true, provider, ...result }
+      const result = await runAgentTurn({
+        userMessage,
+        history,
+        files,
+        generate: llmGenerateContent
+      })
+      return { ok: true, provider: LLM_PROVIDER, ...result }
     } catch (e) {
       logger.error(`[AgentIpc] agent:query error: ${e.message}`)
       return { ok: false, error: e.message }

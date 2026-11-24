@@ -21,10 +21,13 @@ import { logger } from '../Logger'
 
 const ACK_TIMEOUT_MS = 15000
 
-/** Emit with ack + timeout; rejects on server errorMsg or no reply. */
-export function emitWithAck(event, payload) {
+/**
+ * Emit with ack + timeout; rejects on server errorMsg or no reply.
+ * `timeoutMs` is only raised for calls that are slow by nature (the smart-search model).
+ */
+export function emitWithAck(event, payload, timeoutMs = ACK_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
-    socket.timeout(ACK_TIMEOUT_MS).emit(event, payload, (timeoutErr, response) => {
+    socket.timeout(timeoutMs).emit(event, payload, (timeoutErr, response) => {
       if (timeoutErr) return reject(new Error('Server did not respond.'))
       if (response?.errorMsg) return reject(new Error(response.errorMsg))
       resolve(response ?? {})

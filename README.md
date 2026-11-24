@@ -73,7 +73,6 @@ PostgreSQL 要在 Server 之前啟動。Windows 用 PowerShell 執行相同的�
 | `trusted-authority/data/tls.crt`、`tls.key` | TA 的 HTTPS 憑證 | 自簽產生，見 3.2 |
 | `secure-cloud-storage-client/config/local.yaml` | Client 本機開發的連線設定 | 自己建立，範例見 3.3 |
 | `secure-cloud-storage-client/resources/models/gemma-4-E4B-it-Q4_K_M.gguf` | 智慧分類模型（約 5 GB） | 選用，下載方式見 3.4 |
-| `secure-cloud-storage-client/src/main/config/agentApiKeys.json` | 智慧搜尋 Gemini 模式的 API key | 選用；複製同資料夾的 `agentApiKeys.example.json` 後填入 |
 
 - **`wallet.key` 要用維護者給的那一份。** Server 找不到這個檔案時會自動產生新錢包，但新錢包沒有在合約上授權，註冊等需要上鏈的操作會失敗。
 - **第一次啟動會自動建立、不用準備的：** Server 的 `certs/watermark.key` 和 `uploads/`、TA 的 `data/TA.db`、Client 的錢包與金鑰。`watermark.key` 建立後要備份，遺失後舊的浮水印就無法解碼。

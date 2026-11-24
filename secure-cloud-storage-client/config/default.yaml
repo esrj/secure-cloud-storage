@@ -1594,11 +1594,4 @@ blockchain:
 
 trustedAuthority:
   url: '211.73.82.228:2999'
-agent:
-  provider: ollama 
-  ollama:
-    # 11435 是 SSH 通道在本機的入口，通道把它轉到伺服器上的 Ollama（見 scripts/tunnel.sh、win_build.md）。
-    # 不用 11434：那是本機自己安裝的 Ollama 的預設埠，上面沒有伺服器的模型。
-    url: 'http://localhost:11435'
-    model: 'gemma4-31b-8k:latest'
-    numCtx: 8192
+# 智慧搜尋的語言模型由 Cloud Server 代為呼叫，Client 不需要任何模型設定，也不需要 SSH 通道。

@@ -1,26 +1,40 @@
 /**
- * Provider dispatch for the metadata search agent's LLM calls.
- * `agent.provider` in config (or AGENT_PROVIDER env) selects the backend:
- *   - 'ollama' (default): local Ollama server, no data leaves the machine
- *   - 'gemini':           Google Gemini API
+ * LLM access for the metadata search agent.
+ *
+ * The client has no model of its own. Every call goes to the Cloud Server over the existing
+ * Socket.IO connection (`agent-llm`) and the server runs it on its GPU, so smart search works
+ * on any computer that can log in: no local Ollama, no SSH tunnel. The server also owns the
+ * system prompts and the model choice; the client only names the task.
  */
-import { geminiGenerateContent } from './GeminiClient.js'
-import { ollamaGenerateContent } from './OllamaClient.js'
-import { logger } from '../Logger'
+import { socket } from '../MessageManager.js'
+import { emitWithAck } from '../ipc/adminIpc.js'
+import { logger } from '../Logger.js'
+import { describeLlmError } from './llmErrors.js'
 
-export function resolveProvider() {
-  if (process.env.AGENT_PROVIDER) return process.env.AGENT_PROVIDER
+/** Recorded with each logged conversation turn. */
+export const LLM_PROVIDER = 'server'
+
+// The server gives Ollama 150 s (a cold model takes about 80 s to load). Waiting longer than
+// that here means the server always answers first, with the real reason for a failure.
+const LLM_ACK_TIMEOUT_MS = 180000
+
+/**
+ * Run one LLM task on the server.
+ * @param {object} opts
+ * @param {'parse'|'summary'} opts.task
+ * @param {{ role: 'user'|'assistant', content: string }[]} opts.messages
+ * @returns {Promise<string>} the model's text
+ * @throws {Error} with a message that can be shown to the user
+ */
+export async function llmGenerateContent({ task, messages }) {
   try {
-    const config = require('config')
-    if (config.has('agent.provider')) return config.get('agent.provider')
+    // Without this check the request would sit in the socket's send buffer until the timeout.
+    if (!socket.connected) throw new Error('NOT_CONNECTED')
+    const { text } = await emitWithAck('agent-llm', { task, messages }, LLM_ACK_TIMEOUT_MS)
+    if (typeof text !== 'string') throw new Error('LLM_UNAVAILABLE')
+    return text
   } catch (e) {
-    logger.warn(`[LlmClient] config unavailable, defaulting to ollama: ${e.message}`)
+    logger.warn(`[LlmClient] ${task} failed: ${e.message}`)
+    throw new Error(describeLlmError(e.message))
   }
-  return 'ollama'
-}
-
-export async function llmGenerateContent(opts) {
-  const provider = resolveProvider()
-  if (provider === 'gemini') return geminiGenerateContent(opts)
-  return ollamaGenerateContent(opts)
 }

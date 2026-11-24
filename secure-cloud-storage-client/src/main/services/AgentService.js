@@ -1,64 +1,15 @@
 /**
  * Two-phase metadata search agent with relevance scoring.
  *
- * Phase 1 — NL → JSON filter  (temperature 0, deterministic)
+ * Phase 1 — NL → JSON filter  (LLM task 'parse')
  * Phase 2 — Hard filter execution (pure JS)
  * Phase 3 — Relevance scoring + sort
- * Phase 4 — LLM summary
+ * Phase 4 — LLM summary  (LLM task 'summary')
+ *
+ * The two LLM tasks run on the Cloud Server, which also holds their system prompts
+ * (AgentLlm.js there). Filtering and scoring stay on this machine.
  */
-import { llmGenerateContent } from './LlmClient.js'
 import { logger } from '../Logger.js'
-
-// ─── Prompts ─────────────────────────────────────────────────────────────────
-
-const PARSE_SYSTEM = `你是一個檔案搜尋助手。將使用者的自然語言查詢轉換成結構化 JSON 過濾條件。
-
-【可用欄位】
-- name        (string): 檔案名稱（含副檔名），用 name.contains 做部分比對
-- file_type   (string[]): 副檔名，例如 ["pdf","docx","txt","xlsx"]
-- tags        (string[]): 分類標籤。重要：「海軍」「陸軍」「空軍」「聯合作戰」「演訓戰備」「其他」等軍事分類一律放在 tags，不要放在 name
-  - tags.any    : 只要有其中一個標籤就符合（OR）
-  - tags.all    : 必須同時有所有標籤（AND）
-  - tags.none   : 不能有這些標籤（排除）
-- is_public   (true/false): 是否為公開文件
-- date.after / date.before (YYYY-MM-DD): 上傳日期範圍
-- size.min / size.max (bytes): 檔案大小
-- desc.contains (string): 說明欄位關鍵字
-- uploader_name.contains (string): 上傳者名稱
-- is_own      (true/false): true = 使用者自己的檔案；false = 別人分享的公開檔案
-- folder_path.contains (string): 自己檔案所在的資料夾路徑（別人的檔案沒有路徑）
-- any_text    (string): 跨欄位模糊搜尋（同時比對 name、desc、tags、folder_path）
-
-【重要規則】
-1. 分類標籤（海軍/陸軍/空軍等）一定要放在 tags.any，不要放在 name.contains
-2. 若使用者說「只找公開」→ is_public: true；說「私人/機密」→ is_public: false
-   說「我的/自己的檔案」→ is_own: true；說「別人的/其他人分享的」→ is_own: false
-3. 若使用者要求「不要某類型」，用 tags.none 排除
-4. 排序預設按相關度（不需指定），只有使用者明確說「按日期/大小」才用 sort
-
-【回傳格式】只輸出 JSON，不要 markdown 或任何額外文字：
-{
-  "intent": "一句話描述使用者意圖",
-  "filters": {
-    "name":          { "contains": "..." },
-    "file_type":     ["pdf", "docx"],
-    "tags":          { "any": ["海軍"], "all": [], "none": [] },
-    "is_public":     true,
-    "date":          { "after": "2024-01-01", "before": "2025-12-31" },
-    "size":          { "min": 0, "max": 10485760 },
-    "desc":          { "contains": "..." },
-    "uploader_name": { "contains": "..." },
-    "is_own":        true,
-    "folder_path":   { "contains": "..." },
-    "any_text":      "..."
-  },
-  "sort": { "field": "date", "order": "desc" }
-}
-只填有意義的欄位，其餘省略。無法判斷條件時回傳 { "intent": "...", "filters": {}, "sort": null }。`
-
-const SUMMARY_SYSTEM = `你是一個友善的檔案搜尋助手，只能分析 metadata（檔名、標籤、日期、大小、公開狀態、說明、上傳者、位置：自己的資料夾或別人的公開檔案），不能讀取文件內容。
-用繁體中文、對話語氣（3-5句）總結搜尋結果：說明找到幾份檔案、最相關的是哪些、符合的原因是什麼（依相關度評分排序）。
-若無結果，說明可能原因並給出修改建議。簡潔回答，不要用 markdown 清單格式。`
 
 // ─── Hard filter ─────────────────────────────────────────────────────────────
 
@@ -259,6 +210,8 @@ function extractKeywords(message) {
   return [...new Set(tokens)]
 }
 
+const clip = (text, max) => (text.length > max ? text.slice(0, max) + '…' : text)
+
 function parseJsonFromText(text) {
   const cleaned = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim()
   return JSON.parse(cleaned)
@@ -296,28 +249,39 @@ function normalizeFilters(filters) {
  * @param {string} opts.userMessage
  * @param {{ role: 'user'|'assistant', content: string }[]} opts.history
  * @param {import('./MetadataCollector.js').SearchableFile[]} opts.files
+ * @param {(call: { task: 'parse'|'summary', messages: object[] }) => Promise<string>} opts.generate
+ *        Runs one LLM task (LlmClient.llmGenerateContent). When it fails, its error message
+ *        is a reason that can be shown to the user.
  * @returns {Promise<AgentTurnResult>}
  */
-export async function runAgentTurn({ userMessage, history, files }) {
+export async function runAgentTurn({ userMessage, history, files, generate }) {
   // ── Phase 1: NL → filter ──
   const parseMessages = [
-    ...history.slice(-6),
+    ...history
+      .filter((m) => typeof m?.content === 'string' && m.content.trim())
+      .slice(-6)
+      .map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: clip(m.content, 2000)
+      })),
     { role: 'user', content: userMessage }
   ]
 
   let parsedQuery = { intent: userMessage, filters: {}, sort: null }
-  let llmAvailable = true
+  // Why the LLM could not be used for this turn; stays '' when it worked.
+  let llmError = ''
   try {
-    const parseRaw = await llmGenerateContent({
-      messages: parseMessages,
-      systemInstruction: PARSE_SYSTEM,
-      temperature: 0
-    })
-    parsedQuery = parseJsonFromText(parseRaw)
-    parsedQuery.filters = normalizeFilters(parsedQuery.filters)
+    const parseRaw = await generate({ task: 'parse', messages: parseMessages })
+    try {
+      parsedQuery = parseJsonFromText(parseRaw)
+      parsedQuery.filters = normalizeFilters(parsedQuery.filters)
+    } catch (e) {
+      logger.warn(`[AgentService] parse phase answer is not the expected JSON: ${e.message}`)
+      throw new Error('語言模型的回答無法解讀')
+    }
     logger.debug(`[AgentService] parsed query: ${JSON.stringify(parsedQuery)}`)
   } catch (e) {
-    llmAvailable = false
+    llmError = e.message
     logger.warn(`[AgentService] parse phase failed, falling back to keyword search: ${e.message}`)
     // Fallback: extract meaningful keywords from the message so irrelevant files are excluded
     const keywords = extractKeywords(userMessage)
@@ -345,46 +309,53 @@ export async function runAgentTurn({ userMessage, history, files }) {
     topResults.length === 0
       ? '查無符合條件的檔案。'
       : topResults
-          .map(
-            (f, i) =>
+          .map((f, i) =>
+            // One line per file, clipped so 20 of them always fit in one request.
+            clip(
               `${i + 1}. [相關分:${f._score}] ${f.name}` +
-              ` | 類型:${f.file_type.toUpperCase() || '未知'}` +
-              ` | 大小:${f.sizeLabel}` +
-              ` | 上傳:${f.upload_time}` +
-              ` | 公開:${f.is_public ? '是' : '否'}` +
-              ` | 上傳者:${f.uploader_name}` +
-              ` | 位置:${f.location ?? ''}` +
-              (f.tags.length ? ` | 標籤:${f.tags.join(',')}` : '') +
-              (f.desc ? ` | 說明:${f.desc.slice(0, 80)}` : '')
+                ` | 類型:${f.file_type.toUpperCase() || '未知'}` +
+                ` | 大小:${f.sizeLabel}` +
+                ` | 上傳:${f.upload_time}` +
+                ` | 公開:${f.is_public ? '是' : '否'}` +
+                ` | 上傳者:${f.uploader_name}` +
+                ` | 位置:${f.location ?? ''}` +
+                (f.tags.length ? ` | 標籤:${f.tags.join(',')}` : '') +
+                (f.desc ? ` | 說明:${f.desc.slice(0, 80)}` : ''),
+              600
+            )
           )
           .join('\n')
 
   const summaryUserMsg =
-    `使用者查詢：「${userMessage}」\n` +
-    `解析意圖：${parsedQuery.intent ?? ''}\n` +
+    `使用者查詢：「${clip(userMessage, 500)}」\n` +
+    `解析意圖：${clip(String(parsedQuery.intent ?? ''), 300)}\n` +
     `符合條件 ${topResults.length} / 總共 ${files.length} 份，已按相關度排序：\n\n${resultSummaryForLlm}`
 
   let summary = `找到 ${topResults.length} 份符合條件的檔案。`
-  if (!llmAvailable) {
-    // LLM unavailable: produce a simple summary without calling Gemini again
+  if (llmError) {
+    // The results below come from keyword matching. Say so, and say why, in both cases:
+    // "no match" from a keyword search means much less than "no match" from the LLM.
+    const notice = `（AI 無法使用：${llmError}。已改用關鍵字搜尋）`
     if (topResults.length === 0) {
-      summary = `查無符合「${userMessage}」的檔案。請確認關鍵字或標籤是否正確。`
+      summary = `${notice}查無符合「${userMessage}」的檔案。請確認關鍵字或標籤是否正確。`
     } else {
       const names = topResults
         .slice(0, 3)
         .map((f) => f.name)
         .join('、')
-      summary = `（AI 摘要暫時無法使用）找到 ${topResults.length} 份相關檔案：${names}${topResults.length > 3 ? ' 等' : ''}。`
+      summary = `${notice}找到 ${topResults.length} 份相關檔案：${names}${topResults.length > 3 ? ' 等' : ''}。`
     }
   } else {
     try {
-      summary = await llmGenerateContent({
-        messages: [{ role: 'user', content: summaryUserMsg }],
-        systemInstruction: SUMMARY_SYSTEM,
-        temperature: 0.3
+      const text = await generate({
+        task: 'summary',
+        messages: [{ role: 'user', content: summaryUserMsg }]
       })
+      if (text.trim()) summary = text
     } catch (e) {
+      llmError = e.message
       logger.warn(`[AgentService] summary phase failed: ${e.message}`)
+      summary += `（AI 摘要無法產生：${e.message}）`
     }
   }
 
@@ -396,7 +367,8 @@ export async function runAgentTurn({ userMessage, history, files }) {
     matchCount: topResults.length,
     totalCount: files.length,
     files: resultFiles,
-    parsedQuery
+    parsedQuery,
+    llmError
   }
 }
 
@@ -407,4 +379,5 @@ export async function runAgentTurn({ userMessage, history, files }) {
  * @property {number}   totalCount
  * @property {import('./MetadataCollector.js').SearchableFile[]} files
  * @property {object}   parsedQuery
+ * @property {string}   llmError  why the LLM could not be used ('' when it worked); the summary already says it
  */

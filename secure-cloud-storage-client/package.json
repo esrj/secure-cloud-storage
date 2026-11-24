@@ -12,6 +12,7 @@
     "dev": "electron-vite dev",
     "test": "jest",
     "test:classifier": "node --test --experimental-test-module-mocks test/classifier/*.test.mjs",
+    "test:agent": "node --test --experimental-test-module-mocks test/agent/*.test.mjs",
     "test:download": "node --test test/download/*.test.mjs",
     "test:upload": "node --test test/upload/*.test.mjs",
     "build": "electron-vite build",

@@ -17,7 +17,7 @@ export const WELCOME = {
   id: 'welcome',
   role: 'assistant',
   content:
-    '你好！我是智慧搜尋助手。\n\n我可以依據檔名、標籤、分類、日期、大小等 metadata 幫你找到需要的文件。\n\n注意：使用雲端 Gemini 模式時，僅權限設為「公開」的檔案可被搜尋；本機模型模式可搜尋目前清單內全部檔案。\n\n請問有什麼需要搜尋的嗎？',
+    '你好！我是智慧搜尋助手。\n\n我可以依據檔名、標籤、分類、日期、大小等 metadata 幫你找到需要的文件。\n\n搜尋範圍是你的全部檔案與所有公開檔案，不會讀取檔案內容。\n\n請問有什麼需要搜尋的嗎？',
   files: [],
   matchCount: 0,
   totalCount: 0
