@@ -42,6 +42,7 @@ import { logger } from '../Logger'
 import { resolveModelPath } from './classifierModelLocator.js'
 import { getWindowsClassifierSupport } from './windowsClassifierModel.js'
 import { ClassifierModelError, MODEL_ERROR, isModelLevelError } from './classifierModelErrors.js'
+import { ZH_CLASSIFY_JSON_SCHEMA } from '../utils/classifyZhJson.js'
 
 // ── Mode → model filename mapping ────────────────────────────────────────────
 // 2026-10：只保留一個模型（fast）= Gemma 4 E4B-it Q4_K_M。9B（medium）與 27B（high）
@@ -131,26 +132,6 @@ export function pickContextSize(charLen) {
   if (charLen <= 1024) return 2048
   if (charLen <= 3072) return 4096
   return HARD_CONTEXT_CAP
-}
-
-const CLASSIFY_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    labels: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          score: { type: 'number' },
-          evidence: { type: 'array', items: { type: 'string' } }
-        },
-        required: ['name', 'score', 'evidence']
-      }
-    },
-    final_labels: { type: 'array', items: { type: 'string' } }
-  },
-  required: ['labels', 'final_labels']
 }
 
 // ── Singletons ────────────────────────────────────────────────────────────────
@@ -338,7 +319,7 @@ async function ensureContext(ctxSize) {
   _loadedCtxSize = ctxSize
 
   if (!_grammar) {
-    _grammar = await _llama.createGrammarForJsonSchema(CLASSIFY_JSON_SCHEMA)
+    _grammar = await _llama.createGrammarForJsonSchema(ZH_CLASSIFY_JSON_SCHEMA)
   }
 }
 

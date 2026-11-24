@@ -383,7 +383,7 @@ ${composite}`
       okRuns.push({ labels: parsed.labels })
     } else {
       anyParseFail = true
-      logger.warn(`[Classify] group ${gi + 1}/${groups.length} JSON parse failed`)
+      logger.warn(`[Classify] group ${gi + 1}/${groups.length} JSON parse failed (${parsed.reason})`)
     }
     report(gi + 1)
   }

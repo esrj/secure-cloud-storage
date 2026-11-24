@@ -160,6 +160,32 @@ function beforeEachReset() {
   state.support = null
 }
 
+// ── Replies without any label ──────────────────────────────────────────────
+
+// What Gemma 4 E4B answered for 陸軍類測試文章_01.pdf on 2026-11-24. It used to
+// come back as a successful ["其他"] with six zero scores.
+const EMPTY_LABELS_REPLY = '{ "labels": [ ], "final_labels": [ "陸軍", "演訓戰備" ] }'
+
+test('a reply with an empty labels array is a failed analysis, not "其他"', async () => {
+  state.generate = async () => EMPTY_LABELS_REPLY
+  const r = await classifyDocuments({ paths: one, mode: 'fast', threshold: 0.55 })
+  assert.equal(r.supported, false)
+  assert.equal(r.reason, 'JSON_PARSE_FAILED')
+  assert.deepEqual(r.labels, [])
+  assert.deepEqual(r.final_labels, [])
+  assert.equal(r.llmRawText, EMPTY_LABELS_REPLY)
+  assert.equal('userHint' in r, false)
+})
+
+test('an empty-labels group does not dilute the other groups', async () => {
+  state.generate = async () => (state.generateCalls === 1 ? EMPTY_LABELS_REPLY : GOOD_JSON)
+  const r = await classifyDocuments({ paths: twenty, mode: 'fast', threshold: 0.55 })
+  assert.equal(state.generateCalls, 2)
+  assert.equal(r.supported, true)
+  assert.deepEqual(r.final_labels, ['海軍', '演訓戰備'])
+  assert.equal(r.extraction.parseSuccessRuns, 1)
+})
+
 // ── Windows (model manager active) ─────────────────────────────────────────
 
 function fakeSupport({ ready = null } = {}) {

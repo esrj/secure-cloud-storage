@@ -5,6 +5,37 @@ export const ZH_LABEL_ORDER = ['海軍', '陸軍', '空軍', '聯合作戰', '�
 const ZH_SET = new Set(ZH_LABEL_ORDER)
 
 /**
+ * JSON schema behind the grammar that constrains the model's reply
+ * (LlamaCppClient → createGrammarForJsonSchema).
+ *
+ * `labels` is pinned to exactly the six labels in ZH_LABEL_ORDER, each with its
+ * name fixed. With a plain `items` schema an empty array was a legal reply, and
+ * Gemma 4 E4B sometimes answered `{"labels": [], "final_labels": [...]}`: all
+ * six scores then read as 0 and the batch was shown as a successful "其他".
+ */
+export const ZH_CLASSIFY_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    labels: {
+      type: 'array',
+      prefixItems: ZH_LABEL_ORDER.map((name) => ({
+        type: 'object',
+        properties: {
+          name: { const: name },
+          score: { type: 'number' },
+          evidence: { type: 'array', items: { type: 'string' } }
+        },
+        required: ['name', 'score', 'evidence']
+      })),
+      minItems: ZH_LABEL_ORDER.length,
+      maxItems: ZH_LABEL_ORDER.length
+    },
+    final_labels: { type: 'array', items: { type: 'string' } }
+  },
+  required: ['labels', 'final_labels']
+}
+
+/**
  * @param {number} n
  */
 function clamp01(n) {
@@ -43,6 +74,8 @@ export function stripMarkdownFence(s) {
 
 /**
  * Parse model JSON → six fixed labels (no final_labels enforcement).
+ * Labels the model left out get score 0; a reply with none of the six labels
+ * is rejected (`NO_LABELS`).
  * @param {string} rawText
  * @returns {{ ok: true, labels: ZhLabelEntry[] } | { ok: false, reason: string }}
  */
@@ -63,6 +96,12 @@ export function parseZhClassificationResponse(rawText) {
     if (entry && typeof entry.name === 'string' && ZH_SET.has(entry.name)) {
       byName.set(entry.name, entry)
     }
+  }
+  // No usable label at all (e.g. `"labels": []`). Filling in six zeros here
+  // would let the caller report a successful "其他" for a reply that carries no
+  // judgement, so treat it like any other unusable reply.
+  if (byName.size === 0) {
+    return { ok: false, reason: 'NO_LABELS' }
   }
 
   /** @type {ZhLabelEntry[]} */
