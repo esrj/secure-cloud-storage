@@ -13,6 +13,7 @@ import authenticationBinder from './Authentication.js'
 import { requestBinder } from './RequestManager.js'
 import { adminBinder } from './AdminManager.js'
 import { agentLogBinder } from './AgentLogManager.js'
+import { agentLlmBinder } from './AgentLlmManager.js'
 import { recoveryBinder } from './RecoveryManager.js'
 import ConfigManager from './ConfigManager.js'
 import { createServer } from 'node:https'
@@ -69,6 +70,7 @@ io.on('connection', (socket) => {
   allFileBinder(socket)
   requestBinder(socket, io)
   agentLogBinder(socket)
+  agentLlmBinder(socket)
   adminBinder(socket)
   recoveryBinder(socket)
 })

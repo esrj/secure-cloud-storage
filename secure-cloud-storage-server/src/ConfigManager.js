@@ -68,6 +68,18 @@ class ConfigManager {
   admin = {
     emails: []
   }
+  // Smart-search LLM relay (AgentLlmManager.js). Clients never reach Ollama themselves.
+  agent = {
+    ollama: {
+      url: 'http://127.0.0.1:11434',
+      model: 'gemma4-31b-8k:latest',
+      numCtx: 8192,
+      keepAlive: '30m',
+      timeoutMs: 150000
+    },
+    maxRequestsPerMinute: 10,
+    warmUp: false
+  }
   smtp = {
     host: '',
     user: '',
@@ -183,6 +195,30 @@ class ConfigManager {
           const value = Number.parseInt(fido[key])
           if (Number.isFinite(value) && value > 0) this.fido[key] = value
         }
+      }
+
+      // Smart-search LLM relay (optional section; defaults above)
+      if (config.has('agent')) {
+        const agent = config.get('agent')
+        const ollama = agent.ollama ?? {}
+        for (const key of ['url', 'model']) {
+          if (typeof ollama[key] === 'string' && ollama[key]) this.agent.ollama[key] = ollama[key]
+        }
+        // No trailing slash: the path is appended as `${url}/api/chat`.
+        this.agent.ollama.url = this.agent.ollama.url.replace(/\/+$/, '')
+        const numCtx = Number.parseInt(ollama.numCtx)
+        if (Number.isFinite(numCtx) && numCtx > 0) this.agent.ollama.numCtx = numCtx
+        // Ollama takes a number of seconds (-1 = never unload) or a duration string like '24h'.
+        if (typeof ollama.keepAlive === 'number' || typeof ollama.keepAlive === 'string') {
+          this.agent.ollama.keepAlive = ollama.keepAlive
+        }
+        const timeoutSec = Number.parseInt(ollama.timeoutSec)
+        if (Number.isFinite(timeoutSec) && timeoutSec > 0) {
+          this.agent.ollama.timeoutMs = timeoutSec * 1000
+        }
+        const perMinute = Number.parseInt(agent.maxRequestsPerMinute)
+        if (Number.isFinite(perMinute) && perMinute > 0) this.agent.maxRequestsPerMinute = perMinute
+        if (typeof agent.warmUp === 'boolean') this.agent.warmUp = agent.warmUp
       }
 
       // Admin bootstrap list: these emails become admins at startup / registration

@@ -227,6 +227,22 @@ export const AgentHistoryRequestSchema = z.object({
   limit: z.number().int().min(1).max(50).optional()
 })
 
+// AgentLlmManager.js
+// The client names a task; it cannot send a system prompt (no 'system' role, unknown keys dropped).
+// A parse call carries at most 6 history messages plus the new one.
+export const AgentLlmRequestSchema = z.object({
+  task: z.enum(['parse', 'summary']),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().max(16000)
+      })
+    )
+    .min(1)
+    .max(8)
+})
+
 // AdminManager.js
 export const AdminUserIdRequestSchema = z.object({
   userId: z.uuidv4()

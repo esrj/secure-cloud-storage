@@ -85,3 +85,12 @@ fido: # 指紋帳號復原（FIDO2 安全金鑰）。rpId 必須與 Client 端 F
   maxRecoverAttempts: 5 # 同一次 OTP 內金鑰驗證失敗幾次後必須重新收信
 admin: # 啟動與註冊時，email 在此清單者自動成為管理員；亦可直接在資料庫設定 users.role
   emails: []
+agent: # 智慧搜尋的語言模型。Client 不自己連 Ollama，由 Server 代為呼叫（agent-llm 事件）
+  ollama:
+    url: 'http://127.0.0.1:11434' # Docker 部署時在 local.yaml 改成 http://ollama:11434
+    model: 'gemma4-31b-8k:latest'
+    numCtx: 8192 # 每次呼叫都要相同，否則 Ollama 會重新載入模型
+    keepAlive: '30m' # 模型閒置多久後卸載；正式主機在 local.yaml 設 -1（常駐 GPU）
+    timeoutSec: 150 # 等 Ollama 回應的上限，須短於 Client 等 Server 的 180 秒
+  maxRequestsPerMinute: 10 # 每位使用者每分鐘的呼叫上限；一次搜尋會呼叫兩次
+  warmUp: false # Server 啟動時先載入模型；正式主機在 local.yaml 設 true
