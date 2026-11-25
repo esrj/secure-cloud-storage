@@ -13,13 +13,13 @@ import Database from 'better-sqlite3'
 import GlobalValueManager from './GlobalValueManager'
 import { basename } from 'node:path'
 import KeyManager from './KeyManager'
-import { deriveAESKeyIvFromBuffer } from './Utils'
+import { deriveAESKeyFromBuffer } from './Utils'
 import { createReadStream } from 'node:fs'
 import { rename, writeFile } from 'node:fs/promises'
 import { net } from 'electron'
 import { socket } from './MessageManager'
 import { logger } from './Logger'
-import crypto from 'node:crypto'
+import { decryptBytes, encryptStream } from './AesCbc'
 import FormData from 'form-data'
 
 class DatabaseManager {
@@ -77,13 +77,13 @@ class DatabaseManager {
     try {
       this.db.close()
       const sk = this.keyManager.getKeys().sk
-      const { key, iv } = await deriveAESKeyIvFromBuffer(sk)
-      const encryptor = crypto.createCipheriv('aes-256-cbc', key, iv)
+      const key = await deriveAESKeyFromBuffer(sk)
       const fileStream = createReadStream(GlobalValueManager.dbPath)
-      fileStream.pipe(encryptor)
+      // The backup starts with its own random IV, followed by the ciphertext (see AesCbc.js).
+      const encryptedStream = encryptStream(key, fileStream)
       logger.info('Upload encrypted database to server.')
       const form = new FormData()
-      form.append('file', encryptor, basename(GlobalValueManager.dbPath))
+      form.append('file', encryptedStream, basename(GlobalValueManager.dbPath))
       const request = net.request({
         method: 'POST',
         url: `${GlobalValueManager.httpsUrl}/uploadDb`,
@@ -150,9 +150,8 @@ class DatabaseManager {
     let plain
     try {
       const sk = this.keyManager.getKeys().sk
-      const { key, iv } = await deriveAESKeyIvFromBuffer(sk)
-      const decryptor = crypto.createDecipheriv('aes-256-cbc', key, iv)
-      plain = Buffer.concat([decryptor.update(encrypted), decryptor.final()])
+      const key = await deriveAESKeyFromBuffer(sk)
+      plain = decryptBytes(key, encrypted)
     } catch (error) {
       logger.error(`Database backup could not be decrypted: ${error.message}`)
       return { restored: false, reason: 'error' }

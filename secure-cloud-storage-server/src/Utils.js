@@ -202,11 +202,13 @@ export function bigIntToUuid(uuidBigInt) {
 }
 
 /**
- * Derive AES key and iv from the provided base buffer.
+ * Derive the keys for the personal fields of the users table from the provided base buffer:
+ * the AES key, and a separate key for lookup values (see UserFieldCrypto.js). The two are
+ * different parts of one HKDF output, so knowing one says nothing about the other.
  * @param {ArrayBufferLike} baseMaterial The base buffer for derivation.
- * @returns The derive AES key and iv.
+ * @returns The derived AES key and lookup key, 32 bytes each.
  */
-export async function deriveAESKeyIvFromBuffer(baseMaterial) {
+export async function deriveFieldKeysFromBuffer(baseMaterial) {
   const baseKey = await subtle.importKey('raw', baseMaterial, 'HKDF', false, ['deriveBits'])
   const derivedBits = await subtle.deriveBits(
     {
@@ -216,43 +218,11 @@ export async function deriveAESKeyIvFromBuffer(baseMaterial) {
       salt: new Uint8Array()
     },
     baseKey,
-    48 * 8
+    80 * 8
   )
   const key = derivedBits.slice(0, 32)
-  const iv = derivedBits.slice(32, 48)
-  return { key, iv }
-}
-
-/**
- * Encrypts text with AES
- * @param {string} text
- * @param {Buffer} key
- * @param {Buffer} iv
- * @returns
- */
-export async function encryptWithAES(text, key, iv) {
-  const encryptor = crypto.createCipheriv('aes-256-gcm', key, iv)
-  let encrypted = encryptor.update(text, 'utf-8', 'base64')
-  encrypted += encryptor.final('base64')
-  encrypted += ':'
-  encrypted += encryptor.getAuthTag().toString('base64')
-  return encrypted
-}
-
-/**
- * Decrypts encrypted text with AES
- * @param {text} encryptedText
- * @param {Buffer} key
- * @param {Buffer} iv
- * @returns
- */
-export async function decryptWithAES(encryptedText, key, iv) {
-  const parts = encryptedText.split(':')
-  const decryptor = crypto.createDecipheriv('aes-256-gcm', key, iv)
-  decryptor.setAuthTag(Buffer.from(parts[1], 'base64'))
-  let decrypted = decryptor.update(parts[0], 'base64', 'utf-8')
-  decrypted += decryptor.final('utf-8')
-  return decrypted
+  const lookupKey = derivedBits.slice(48, 80)
+  return { key, lookupKey }
 }
 
 export {

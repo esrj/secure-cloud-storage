@@ -882,7 +882,7 @@ const downloadWithWatermarkBinder = (socket) => {
   })
 
   /**
-   * Forensic trace endpoint: given a tracked uid (full v1... ciphertext) or a
+   * Forensic trace endpoint: given a tracked uid (full v2... value) or a
    * short hex prefix (as embedded in visible watermarks), return the matching
    * user(s).
    *

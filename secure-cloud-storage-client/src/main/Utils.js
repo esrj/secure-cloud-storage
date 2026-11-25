@@ -63,11 +63,12 @@ export function bigIntToHex(hashBigInt, maxLength = 0) {
 }
 
 /**
- * Derive AES key and iv from the provided base buffer.
+ * Derive an AES key from the provided base buffer.
+ * No IV is derived: every encryption takes a new random IV (see AesCbc.js).
  * @param {ArrayBufferLike} baseMaterial The base buffer for derivation.
- * @returns The derive AES key and iv.
+ * @returns {Promise<ArrayBuffer>} The derived AES key, 32 bytes.
  */
-export async function deriveAESKeyIvFromBuffer(baseMaterial) {
+export async function deriveAESKeyFromBuffer(baseMaterial) {
   const baseKey = await subtle.importKey('raw', baseMaterial, 'HKDF', false, ['deriveBits'])
   const derivedBits = await subtle.deriveBits(
     {
@@ -77,11 +78,9 @@ export async function deriveAESKeyIvFromBuffer(baseMaterial) {
       salt: new Uint8Array()
     },
     baseKey,
-    48 * 8
+    32 * 8
   )
-  const key = derivedBits.slice(0, 32)
-  const iv = derivedBits.slice(32, 48)
-  return { key, iv }
+  return derivedBits
 }
 
 export const TryAgainMsg = 'Please try again.'

@@ -2,9 +2,10 @@
  * This file handles file encryption/decryption with AES and creating file hash.
  */
 import crypto from 'crypto'
-import Stream, { Readable } from 'stream'
+import Stream from 'stream'
 import KeyManager from './KeyManager'
 import { logger } from './Logger'
+import { createDecryptStream, decryptBytes, encryptStream } from './AesCbc'
 
 class AESModule {
   keyManager
@@ -18,20 +19,19 @@ class AESModule {
 
   /**
    * Encrypt the readstream with random AES key, and encrypt the AES key with user public key.
+   * The encrypted stream starts with the random IV of this file, followed by the ciphertext.
    * @param {*} readstream
    * @returns
    */
   async encrypt(readstream) {
     const { messageArray, cipher, spk } = await this.keyManager.randCipher()
     const key = messageArray.buffer.slice(0, 32)
-    const iv = messageArray.buffer.slice(32, 48)
-    const streamCipher = crypto.createCipheriv('aes-256-cbc', key, iv)
-    const encryptedStream = Readable.from(readstream.pipe(streamCipher))
+    const encryptedStream = encryptStream(key, readstream)
 
     // Test for encryption error
     // encryptedStream.emit('error', new Error('Test encryption error.'))
 
-    // encode key and iv
+    // encode key
     return {
       cipher,
       spk,
@@ -49,31 +49,21 @@ class AESModule {
    */
   async decryptBuffer(encryptedBuffer, cipher, spk, proxied = false) {
     const message = await this.keyManager.decrypt(cipher, spk, proxied, true)
-    const decipher = crypto.createDecipheriv(
-      'aes-256-cbc',
-      message.buffer.slice(0, 32),
-      message.buffer.slice(32, 48)
-    )
-    return Buffer.concat([decipher.update(encryptedBuffer), decipher.final()])
+    return decryptBytes(message.buffer.slice(0, 32), encryptedBuffer)
   }
 
   /**
    *  Decrypt the encrypted AES key with user's public key and create a decipher stream with the AES key.
+   *  The stream takes the stored bytes (IV, then ciphertext) and gives back the file.
    * @param {string} cipher
    * @param {string} spk
    * @param {boolean} proxied
-   * @returns crypto.Decipher
+   * @returns {import('stream').Transform}
    */
   async decrypt(cipher, spk, proxied = false) {
     const message = await this.keyManager.decrypt(cipher, spk, proxied, true)
-    // decode key and iv
-    const streamDecipher = crypto.createDecipheriv(
-      'aes-256-cbc',
-      message.buffer.slice(0, 32),
-      message.buffer.slice(32, 48)
-    )
-
-    return streamDecipher
+    // decode key
+    return createDecryptStream(message.buffer.slice(0, 32))
   }
 
   /**

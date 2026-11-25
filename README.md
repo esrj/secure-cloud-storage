@@ -109,6 +109,7 @@ admin:
 ```
 
 - **資料庫會自動建立。** Server 第一次啟動時，如果找不到上面的帳號或資料庫，會用 PostgreSQL 管理者身分建立帳號、主資料庫與 `secret_share1`～`secret_share3`，再建立資料表。它會依序嘗試設定裡的帳號、`config/default.yaml` 的 `database.bootstrapRoles`（預設是 `postgres`／`postgres`），以及你的系統使用者（Homebrew 安裝的 PostgreSQL 屬於這種）。全部失敗時，log 會印出要手動執行的 SQL。
+- **舊版留下的資料要先清空。** 加密資料現在每次都使用新的隨機 IV（檔案、資料庫備份、復原碎片、姓名與 email、浮水印追蹤碼），儲存格式和先前的版本不同。用舊版建立過帳號的環境，要先清空主資料庫、`secret_share1`～`secret_share3` 與 `uploads/`，Server 與 Client 一起換成這一版，再重新註冊。資料庫裡還有舊格式的帳號時，Server 啟動會在 log 提示，那些帳號無法登入。
 - **SMTP 一定要能寄信。** 註冊和帳號復原都要輸入寄到信箱的驗證碼，Server 不會把驗證碼印在 log 裡。
 
 ### 3.2 憑證與 SSH 金鑰

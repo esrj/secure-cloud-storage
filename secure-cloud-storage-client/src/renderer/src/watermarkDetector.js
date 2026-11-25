@@ -255,7 +255,7 @@ const PDF_INVISIBLE_HEIGHT_THRESHOLD = 10
 // The visible watermark embeds 8 hex chars of the (server-keyed) tracked uid:
 //     uid:abc12345 | fid:abc12345 | <iso ts>[ | note]
 // The invisible watermark embeds the FULL tracked uid with version prefix:
-//     uid:v1<iv-hex><ct-hex> | fid:<fileId> | ts:<iso ts>[ | note]
+//     uid:v2<tag-hex><iv-hex><ct-hex> | fid:<fileId> | ts:<iso ts>[ | note]
 //
 // `WM_PATTERN` accepts both shapes so detectors don't need to discriminate.
 const WM_PATTERN = /uid:(?:v\d+)?[a-f0-9]+[^|]*\|[^|]*fid:[a-f0-9]+[^\n]*/i
@@ -307,7 +307,7 @@ export async function detectPdfWatermark(file) {
 
     // ── Line clustering ──────────────────────────────────────────────
     // pdfjs returns one TextItem per glyph cluster, so a long invisible
-    // watermark like "uid:v1<128 hex chars> | fid:<uuid> | ts:<iso>" tends
+    // watermark like "uid:v2<160 hex chars> | fid:<uuid> | ts:<iso>" tends
     // to be sliced across multiple items even though it was written as a
     // single showText(). Grouping items by Y coordinate lets us reassemble
     // the original string before running the regex.

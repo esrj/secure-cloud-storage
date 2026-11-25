@@ -2,24 +2,21 @@
  * This file handles secret sharing encryption and decryption.
  */
 import sss from 'shamirs-secret-sharing'
-import crypto from 'crypto'
 import { logger } from './Logger'
-import { deriveAESKeyIvFromBuffer } from './Utils'
-
-const algorithm = 'aes-256-cbc'
+import { deriveAESKeyFromBuffer } from './Utils'
+import { decryptBytes, encryptBytes } from './AesCbc'
 
 /**
  * Encrypt the data string with extra key and split it into shares.
+ * The encrypted data starts with its own random IV (see AesCbc.js).
  * @param {string} sk
  * @param {string} dataStr
  * @returns
  */
 export async function encryptDataShareKey(sk, dataStr) {
   // Encrypt data and share sk
-  const { key, iv } = await deriveAESKeyIvFromBuffer(new TextEncoder().encode(sk))
-  const encryptor = crypto.createCipheriv(algorithm, key, iv)
-  let encrypted = encryptor.update(dataStr, 'utf8', 'hex')
-  encrypted += encryptor.final('hex')
+  const key = await deriveAESKeyFromBuffer(new TextEncoder().encode(sk))
+  const encrypted = encryptBytes(key, Buffer.from(dataStr, 'utf8')).toString('hex')
 
   const secret = Buffer.from(encrypted)
   const shares = sss.split(secret, { shares: 10, threshold: 2 })
@@ -33,14 +30,11 @@ export async function encryptDataShareKey(sk, dataStr) {
  * @returns
  */
 export async function recoverDataShareKey(sk, shares) {
-  const { key, iv } = await deriveAESKeyIvFromBuffer(new TextEncoder().encode(sk))
+  const key = await deriveAESKeyFromBuffer(new TextEncoder().encode(sk))
   const recovered = sss.combine(shares).toString()
 
   try {
-    const decryptor = crypto.createDecipheriv(algorithm, key, iv)
-    let decryptedStr = decryptor.update(recovered, 'hex', 'utf8')
-    decryptedStr += decryptor.final('utf8')
-    return decryptedStr
+    return decryptBytes(key, Buffer.from(recovered, 'hex')).toString('utf8')
   } catch (error) {
     logger.error(error)
     return null

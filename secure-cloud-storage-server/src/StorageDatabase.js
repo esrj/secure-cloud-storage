@@ -5,15 +5,23 @@ import { Pool } from 'pg'
 import ConfigManager from './ConfigManager.js'
 import { logger } from './Logger.js'
 import { randomUUID } from 'node:crypto'
-import { decryptWithAES, deriveAESKeyIvFromBuffer, encryptWithAES } from './Utils.js'
+import { deriveFieldKeysFromBuffer } from './Utils.js'
+import {
+  decryptSearchable,
+  decryptText,
+  encryptSearchable,
+  encryptText,
+  lookupValue
+} from './UserFieldCrypto.js'
 import { readFileSync } from 'node:fs'
 
 //--  Setup --//
 export const pool = new Pool(ConfigManager.dbPoolConfig)
 
-// AES key and iv to encrypt user name and email
+// AES key to encrypt user name and email (a new random IV per value), and a separate key for
+// the lookup value stored in front of the encrypted email. See UserFieldCrypto.js.
 const material = Buffer.from(readFileSync(ConfigManager.blockchain.walletKeyPath))
-const { key, iv } = await deriveAESKeyIvFromBuffer(material)
+const { key, lookupKey } = await deriveFieldKeysFromBuffer(material)
 
 //- New client connected to database
 // pool.on('connect', (client) => {
@@ -37,8 +45,8 @@ pool.on('error', (err) => {
 // Helper function
 const parseUserRows = async (rows) => {
   for (const element of rows) {
-    element.name = element.name ? await decryptWithAES(element.name, key, iv) : undefined
-    element.email = element.email ? await decryptWithAES(element.email, key, iv) : undefined
+    element.name = element.name ? decryptText(element.name, key) : undefined
+    element.email = element.email ? decryptSearchable(element.email, key) : undefined
   }
   return rows
 }
@@ -87,10 +95,37 @@ export const getUserById = async (id) => {
 }
 
 export const getUserByEmail = async (email) => {
-  const encryptedEmail = await encryptWithAES(email, key, iv)
-  const res = await pool.query('SELECT * FROM users WHERE email = $1', [encryptedEmail])
+  // The email column starts with the lookup value of the email, up to the first ':'.
+  const emailLookup = lookupValue(email, lookupKey)
+  const res = await pool.query(`SELECT * FROM users WHERE split_part(email, ':', 1) = $1`, [
+    emailLookup
+  ])
   const parsedRows = await parseUserRows(res.rows)
   return parsedRows[0]
+}
+
+/**
+ * Accounts written by a version that encrypted name and email with a fixed IV cannot be read
+ * by this one. Say so once at start-up, so it does not surface as one failed login after another.
+ * @returns {Promise<number>} how many such accounts there are
+ */
+export const warnAboutUsersInEarlierFormat = async () => {
+  try {
+    const res = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM users WHERE array_length(string_to_array(email, ':'), 1) <> 4`
+    )
+    const count = res.rows[0].n
+    if (count > 0) {
+      logger.warn(
+        `[Users] ${count} account(s) are stored in the format of an earlier version and cannot log in. ` +
+          'This version needs the databases and the upload directory to be emptied first.'
+      )
+    }
+    return count
+  } catch (error) {
+    logger.error(error)
+    return 0
+  }
 }
 
 /**
@@ -125,8 +160,8 @@ export const updateUserStatusById = async (id, status) => {
  * @returns {Promise<import('pg').QueryResult>} A promise that resolves to the query result.
  */
 export const updateUserInfoById = async (id, name, email) => {
-  const encryptedName = await encryptWithAES(name, key, iv)
-  const encryptedEmail = await encryptWithAES(email, key, iv)
+  const encryptedName = encryptText(name, key)
+  const encryptedEmail = encryptSearchable(email, key, lookupKey)
   return await pool.query('UPDATE users SET name = $1, email = $2 WHERE id = $3', [
     encryptedName,
     encryptedEmail,
@@ -159,8 +194,8 @@ export const AddUserAndGetId = async (
   role = userRoleType.user
 ) => {
   const id = randomUUID().toString()
-  const encryptedName = await encryptWithAES(name, key, iv)
-  const encryptedEmail = await encryptWithAES(email, key, iv)
+  const encryptedName = encryptText(name, key)
+  const encryptedEmail = encryptSearchable(email, key, lookupKey)
   const info = await pool.query(
     'INSERT INTO users (id, pk, address, name, email, status, role) VALUES ($1, $2, $3, $4, $5, $6, $7)',
     [id, pk, blockchainAddress, encryptedName, encryptedEmail, userStatusType.activate, role]
@@ -571,12 +606,8 @@ const parseRequestResponseRows = async (rows) => {
     element.requestTime = element.requesttime
     element.responseDescription = element.responsedescription
     element.responseTime = element.responsetime
-    element.userName = element.username
-      ? await decryptWithAES(element.username, key, iv)
-      : undefined
-    element.userEmail = element.useremail
-      ? await decryptWithAES(element.useremail, key, iv)
-      : undefined
+    element.userName = element.username ? decryptText(element.username, key) : undefined
+    element.userEmail = element.useremail ? decryptSearchable(element.useremail, key) : undefined
     delete element.ownerid
     delete element.originownerid
     delete element.parentfolderid
@@ -950,8 +981,8 @@ export const updateUserRoleById = async (id, role) => {
 
 /**
  * Promote every user whose email is listed to admin (idempotent, never demotes).
- * Emails are stored AES-encrypted with a deterministic IV, so candidates are
- * encrypted and compared as ciphertext. The exact string and its lower-cased
+ * Emails are stored encrypted with a random IV, behind a keyed lookup value of the
+ * email; candidates are matched on that value. The exact string and its lower-cased
  * form are both tried because registration stores the email as typed.
  * @param {string[]} emails
  * @returns {Promise<number>} number of users promoted by this call
@@ -963,11 +994,11 @@ export const ensureAdminRoles = async (emails = []) => {
     if (!trimmed) continue
     const variants = [...new Set([trimmed, trimmed.toLowerCase()])]
     for (const variant of variants) {
-      const encryptedEmail = await encryptWithAES(variant, key, iv)
-      const res = await pool.query('UPDATE users SET role = $1 WHERE email = $2 AND role <> $1', [
-        userRoleType.admin,
-        encryptedEmail
-      ])
+      const emailLookup = lookupValue(variant, lookupKey)
+      const res = await pool.query(
+        `UPDATE users SET role = $1 WHERE split_part(email, ':', 1) = $2 AND role <> $1`,
+        [userRoleType.admin, emailLookup]
+      )
       promoted += res.rowCount
     }
   }
