@@ -1,9 +1,9 @@
 import { createReadStream } from 'node:fs'
 import { logSocketWarning } from './Logger.js'
 import { getFolderInfoOfOwnerId, getUserById, userStatusType } from './StorageDatabase.js'
-import { resolve } from 'node:path'
 import crypto, { subtle } from 'node:crypto'
 import ConfigManager from './ConfigManager.js'
+import { resolveFilePath, resolveUserDir } from './UploadPath.js'
 
 const keyFormatRe = /^[a-zA-Z0-9+/=]+$/
 const emailFormatRe = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/
@@ -122,13 +122,22 @@ const checkFolderExistsForUser = async (folderId, userId) => {
 }
 
 /**
+ * Get the upload folder of certain user
+ * @param {string} userId
+ * @returns {string}
+ */
+const getUserDir = (userId) => {
+  return resolveUserDir(ConfigManager.uploadDir, userId)
+}
+
+/**
  * Get file path for certain user and fileId
  * @param {string} userId
  * @param {string} fileId
  * @returns {string}
  */
 const getFilePath = (userId, fileId) => {
-  return resolve(ConfigManager.uploadDir, userId, fileId)
+  return resolveFilePath(ConfigManager.uploadDir, userId, fileId)
 }
 
 /**
@@ -222,11 +231,11 @@ export async function deriveAESKeyIvFromBuffer(baseMaterial) {
  * @returns
  */
 export async function encryptWithAES(text, key, iv) {
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
-  let encrypted = cipher.update(text, 'utf-8', 'base64')
-  encrypted += cipher.final('base64')
+  const encryptor = crypto.createCipheriv('aes-256-gcm', key, iv)
+  let encrypted = encryptor.update(text, 'utf-8', 'base64')
+  encrypted += encryptor.final('base64')
   encrypted += ':'
-  encrypted += cipher.getAuthTag().toString('base64')
+  encrypted += encryptor.getAuthTag().toString('base64')
   return encrypted
 }
 
@@ -239,10 +248,10 @@ export async function encryptWithAES(text, key, iv) {
  */
 export async function decryptWithAES(encryptedText, key, iv) {
   const parts = encryptedText.split(':')
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
-  decipher.setAuthTag(Buffer.from(parts[1], 'base64'))
-  let decrypted = decipher.update(parts[0], 'base64', 'utf-8')
-  decrypted += decipher.final('utf-8')
+  const decryptor = crypto.createDecipheriv('aes-256-gcm', key, iv)
+  decryptor.setAuthTag(Buffer.from(parts[1], 'base64'))
+  let decrypted = decryptor.update(parts[0], 'base64', 'utf-8')
+  decrypted += decryptor.final('utf-8')
   return decrypted
 }
 
@@ -250,6 +259,7 @@ export {
   checkLoggedIn,
   checkAdmin,
   checkFolderExistsForUser,
+  getUserDir,
   getFilePath,
   calculateFileHash,
   keyFormatRe,

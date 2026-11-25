@@ -4,7 +4,7 @@
  * Pure factory (no config or logger imports) so it can be tested against throwaway
  * databases. SecretShareDatabase.js wires it to the configured pools.
  */
-import { PASSWORD_METHOD_ID } from './RecoverySchema.js'
+import { DEFAULT_METHOD_ID } from './RecoverySchema.js'
 
 /**
  * @param {Array<import('pg').Pool>} pools one pool per share database
@@ -16,7 +16,7 @@ export function createSecretShareStore(pools, logger = console) {
    * recovery still works as long as the Shamir threshold is met.
    * @returns {Promise<string[]>}
    */
-  async function retrieveUserShares(userId, methodId = PASSWORD_METHOD_ID) {
+  async function retrieveUserShares(userId, methodId = DEFAULT_METHOD_ID) {
     const shares = []
     for (const pool of pools) {
       try {
@@ -57,7 +57,7 @@ export function createSecretShareStore(pools, logger = console) {
    * offered to the next database.
    * @returns {Promise<number>} how many shares were stored
    */
-  async function storeUserShares(userId, shares, methodId = PASSWORD_METHOD_ID) {
+  async function storeUserShares(userId, shares, methodId = DEFAULT_METHOD_ID) {
     let i = 0
     let j = 0
     while (i < shares.length && j < pools.length) {

@@ -78,12 +78,12 @@ class DatabaseManager {
       this.db.close()
       const sk = this.keyManager.getKeys().sk
       const { key, iv } = await deriveAESKeyIvFromBuffer(sk)
-      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
+      const encryptor = crypto.createCipheriv('aes-256-cbc', key, iv)
       const fileStream = createReadStream(GlobalValueManager.dbPath)
-      fileStream.pipe(cipher)
+      fileStream.pipe(encryptor)
       logger.info('Upload encrypted database to server.')
       const form = new FormData()
-      form.append('file', cipher, basename(GlobalValueManager.dbPath))
+      form.append('file', encryptor, basename(GlobalValueManager.dbPath))
       const request = net.request({
         method: 'POST',
         url: `${GlobalValueManager.httpsUrl}/uploadDb`,
@@ -151,8 +151,8 @@ class DatabaseManager {
     try {
       const sk = this.keyManager.getKeys().sk
       const { key, iv } = await deriveAESKeyIvFromBuffer(sk)
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
-      plain = Buffer.concat([decipher.update(encrypted), decipher.final()])
+      const decryptor = crypto.createDecipheriv('aes-256-cbc', key, iv)
+      plain = Buffer.concat([decryptor.update(encrypted), decryptor.final()])
     } catch (error) {
       logger.error(`Database backup could not be decrypted: ${error.message}`)
       return { restored: false, reason: 'error' }

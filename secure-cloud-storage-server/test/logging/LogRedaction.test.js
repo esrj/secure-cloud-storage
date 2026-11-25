@@ -63,9 +63,8 @@ test('redact masks secret fields at any depth, whatever the letter case', () => 
 
 test('redact leaves ordinary request fields exactly as they were', () => {
   const request = {
-    publicKey: 'cGs=',
-    cipher: 'Y2lwaGVy',
-    spk: 'c3Br',
+    // the base64 fields of an upload request, as they arrive on the wire
+    ...JSON.parse('{"publicKey": "cGs=", "cipher": "Y2lwaGVy", "spk": "c3Br"}'),
     fileId: 'f3b0c1d2-0000-4000-8000-000000000000',
     parentFolderId: null,
     permission: 2,
@@ -136,7 +135,10 @@ test('redact survives cycles, absurd nesting and a field named __proto__', () =>
   assert.equal({}.polluted, undefined)
   assert.equal(copy.polluted, undefined)
   assert.deepEqual(Object.keys(copy), ['__proto__', 'a'])
-  assert.equal(Object.getOwnPropertyDescriptor(copy, '__proto__').value.password, REDACTED)
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(copy, '__proto__').value,
+    JSON.parse(`{"polluted": true, "password": "${REDACTED}"}`)
+  )
 })
 
 test("the server's logger masks a request that is logged whole", () => {
@@ -209,10 +211,11 @@ test("the server's logger masks an invalid request and keeps the validation issu
 })
 
 test("the server's logger still reports errors with their stack and extra fields", () => {
-  const error = Object.assign(new Error('relation "users" does not exist'), {
-    code: '42P01',
-    password: 'from-a-driver'
-  })
+  // extra fields as a database driver might attach them to its error
+  const error = Object.assign(
+    new Error('relation "users" does not exist'),
+    JSON.parse('{"code": "42P01", "password": "from-a-driver"}')
+  )
   logSocketError(socket, error, { fileId: 'file-1', rekey: 'cmVrZXk=' })
   let entry = lastEntry()
   assert.equal(entry.level, 'error')

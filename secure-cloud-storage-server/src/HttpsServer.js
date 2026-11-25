@@ -5,14 +5,13 @@ import { logger, logHttpsError, logHttpsInfo, logHttpsWarning } from './Logger.j
 import { mkdir, unlink } from 'node:fs/promises'
 import multer from 'multer'
 import { getFileInfo, getUserByKey } from './StorageDatabase.js'
-import { resolve } from 'node:path'
 import ConfigManager from './ConfigManager.js'
 import { finishUpload, hasUpload } from './UploadVerifier.js'
 import { app } from './SocketIO.js'
 import { FileIdSchema, PublicKeySchema, SocketIDSchema } from './Validation.js'
 import { getLoggedInUserIdOfSocket } from './UserLoginInfo.js'
 import { fileTypeFromFile } from 'file-type'
-import { getFilePath, riskyMimeTypes } from './Utils.js'
+import { getFilePath, getUserDir, riskyMimeTypes } from './Utils.js'
 import { createDownloadDbHandler } from './DatabaseBackupRoute.js'
 
 // prepare user directory and stored filename
@@ -20,7 +19,7 @@ const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
       // Store the uploaded file the user's upload directory
-      const folderPath = resolve(ConfigManager.uploadDir, req.userId)
+      const folderPath = getUserDir(req.userId)
       await mkdir(folderPath, { recursive: true })
       cb(null, folderPath)
     } catch (error) {
@@ -131,7 +130,9 @@ app.post('/upload', auth, checkUpload, upload.single('file'), async (req, res, n
     }
   } catch (error) {
     try {
-      await unlink(req.file.path)
+      // Same file as req.file.path, located by the server's own ids
+      const storedPath = getFilePath(req.userId, req.file.filename)
+      await unlink(storedPath)
     } catch (error) {
       if (error.code !== 'ENOENT') {
         logHttpsError(req, error)
@@ -167,7 +168,8 @@ app.get('/download', auth, async (req, res, next) => {
       res.status(403).send('File not owned.')
     } else {
       logHttpsInfo(req, 'Client downloading file.')
-      res.download(resolve(ConfigManager.uploadDir, req.userId, fileInfo.id), fileInfo.name)
+      const filePath = getFilePath(req.userId, fileInfo.id)
+      res.download(filePath, fileInfo.name)
     }
   } catch (error) {
     next(error)

@@ -6,9 +6,9 @@ import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
 import pg from 'pg'
 import {
-  PASSWORD_METHOD_ID,
+  DEFAULT_METHOD_ID,
   RECOVERY_METHOD_TABLE_SQL,
-  SECRET_SHARE_SQLS
+  SHARE_DB_SQLS
 } from '../../src/RecoverySchema.js'
 import { createRecoveryMethodStore } from '../../src/RecoveryMethodStore.js'
 import { createSecretShareStore } from '../../src/SecretShareStore.js'
@@ -67,12 +67,12 @@ test(
       userid TEXT NOT NULL PRIMARY KEY, share TEXT NOT NULL, retrievable BOOLEAN NOT NULL)`)
     await pool.query(`INSERT INTO secret_share VALUES ('legacy-user', 'bGVnYWN5', TRUE)`)
 
-    for (let i = 0; i < 3; i++) for (const sql of SECRET_SHARE_SQLS) await pool.query(sql)
+    for (let i = 0; i < 3; i++) for (const sql of SHARE_DB_SQLS) await pool.query(sql)
 
     assert.deepEqual(await primaryKeyColumns(pool), ['userid', 'method_id'])
     const rows = (await pool.query(`SELECT userid, method_id, share FROM secret_share`)).rows
     assert.deepEqual(rows, [
-      { userid: 'legacy-user', method_id: PASSWORD_METHOD_ID, share: 'bGVnYWN5' }
+      { userid: 'legacy-user', method_id: DEFAULT_METHOD_ID, share: 'bGVnYWN5' }
     ])
 
     // The old password flow keeps working on the upgraded table.
@@ -83,7 +83,7 @@ test(
 
 test('fresh share databases get the new layout, idempotently', { skip }, async () => {
   for (const pool of sharePools.slice(1)) {
-    for (let i = 0; i < 2; i++) for (const sql of SECRET_SHARE_SQLS) await pool.query(sql)
+    for (let i = 0; i < 2; i++) for (const sql of SHARE_DB_SQLS) await pool.query(sql)
     assert.deepEqual(await primaryKeyColumns(pool), ['userid', 'method_id'])
   }
 })
@@ -107,7 +107,7 @@ test(
     assert.deepEqual(await store.retrieveUserShares(userId, fidoId), ['ZjE=', 'ZjI=', 'ZjM='])
     assert.deepEqual(
       [...(await store.listUserShareMethodIds(userId))].sort(),
-      [fidoId, PASSWORD_METHOD_ID].sort()
+      [fidoId, DEFAULT_METHOD_ID].sort()
     )
 
     await store.deleteUserShares(userId, fidoId)

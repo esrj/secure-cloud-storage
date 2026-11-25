@@ -131,11 +131,13 @@ export const logInvalidSchemaWarning = (socket, action, issues, metaObj = {}) =>
 
 // FtpsServer.js
 const getFtpsMeta = (data, metaObj) => {
+  // As in FtpsServer.js: an upload login carries the file id in this field, a download login 'guest'.
+  const { password: fileId } = data
   return {
     ip: data.connection.ip,
     userId: data.userId,
     protocol: 'ftps',
-    ...(data.password != 'guest' && { fileId: data.password }),
+    ...(fileId != 'guest' && { fileId }),
     ...metaObj
   }
 }

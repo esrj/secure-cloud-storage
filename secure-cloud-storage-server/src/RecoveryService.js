@@ -21,7 +21,7 @@
 import { randomUUID } from 'node:crypto'
 import * as defaultVerifier from './FidoVerifier.js'
 import { FidoVerificationError, randomB64u } from './FidoVerifier.js'
-import { PASSWORD_METHOD_ID } from './RecoverySchema.js'
+import { DEFAULT_METHOD_ID } from './RecoverySchema.js'
 import {
   FidoBindBeginRequestSchema,
   FidoBindFinishRequestSchema,
@@ -31,7 +31,8 @@ import {
 } from './Validation.js'
 
 export const FIDO_METHOD_TYPE = 'fido'
-export const PASSWORD_METHOD_TYPE = 'password'
+/** Type of the method every account starts with (see DEFAULT_METHOD_ID); the client reads this value. */
+export const DEFAULT_METHOD_TYPE = 'password'
 /** Shamir threshold used by the client (10 shares, threshold 2). */
 export const SHARE_THRESHOLD = 2
 
@@ -136,8 +137,8 @@ export function createRecoveryService({
       shareStore.listUserShareMethodIds(userId)
     ])
     const methods = []
-    if (shareMethodIds.has(PASSWORD_METHOD_ID)) {
-      methods.push({ id: PASSWORD_METHOD_ID, type: PASSWORD_METHOD_TYPE, sharesAvailable: true })
+    if (shareMethodIds.has(DEFAULT_METHOD_ID)) {
+      methods.push({ id: DEFAULT_METHOD_ID, type: DEFAULT_METHOD_TYPE, sharesAvailable: true })
     }
     for (const row of rows) {
       methods.push({

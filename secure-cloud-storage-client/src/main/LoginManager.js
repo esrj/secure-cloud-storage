@@ -304,9 +304,9 @@ class LoginManager {
           'Secret keys could not be recovered because not enough shares were retrieved or extra key is wrong.'
         )
       }
-      const secretKeys = JSON.parse(decryptedStr)
-      this.blockchainManager.restoreWallet(secretKeys.walletKey)
-      this.keyManager.restoreKeys(secretKeys.preKeys)
+      const recovered = JSON.parse(decryptedStr)
+      this.blockchainManager.restoreWallet(recovered.walletKey)
+      this.keyManager.restoreKeys(recovered.preKeys)
       logger.info('Secret key recovered')
     } catch (error) {
       logger.error(error)

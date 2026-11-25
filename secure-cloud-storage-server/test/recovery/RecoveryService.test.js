@@ -19,7 +19,7 @@ const config = {
   maxRecoverAttempts: 3
 }
 const FIDO_SHARES = ['ZmlkbzE=', 'ZmlkbzI=', 'ZmlkbzM=', 'ZmlkbzQ=']
-const PASSWORD_SHARES = ['cHcx', 'cHcy', 'cHcz']
+const DEFAULT_SHARES = ['cHcx', 'cHcy', 'cHcz']
 
 function setup({ shareDown = [] } = {}) {
   let clock = 1_000_000
@@ -65,7 +65,7 @@ const otpPassed = (ctx, userId) => ({
 test('binding stores shares under a new method and lists it', async () => {
   const ctx = setup()
   const socket = loggedIn()
-  await ctx.shareStore.storeUserShares(socket.userId, PASSWORD_SHARES)
+  await ctx.shareStore.storeUserShares(socket.userId, DEFAULT_SHARES)
   const key = createSoftAuthenticator({ rpId: config.rpId })
 
   const { begin, method } = await bindKey(ctx, socket, key)
@@ -84,7 +84,7 @@ test('binding stores shares under a new method and lists it', async () => {
   )
   assert.deepEqual(
     await ctx.shareStore.retrieveUserShares(socket.userId),
-    PASSWORD_SHARES,
+    DEFAULT_SHARES,
     'password shares untouched'
   )
 
@@ -176,7 +176,7 @@ test('binding is limited per user and rolls back when too few shares are stored'
 test('recovery after OTP releases only that method’s shares and is single use', async () => {
   const ctx = setup()
   const owner = loggedIn()
-  await ctx.shareStore.storeUserShares(owner.userId, PASSWORD_SHARES)
+  await ctx.shareStore.storeUserShares(owner.userId, DEFAULT_SHARES)
   const key = createSoftAuthenticator({ rpId: config.rpId })
   const { begin: bindBegin, method } = await bindKey(ctx, owner, key)
 
@@ -280,7 +280,7 @@ test('recovery is bound to the OTP user, expires, and locks after repeated failu
 test('deleting a method removes its shares only, and only for its owner', async () => {
   const ctx = setup()
   const socket = loggedIn()
-  await ctx.shareStore.storeUserShares(socket.userId, PASSWORD_SHARES)
+  await ctx.shareStore.storeUserShares(socket.userId, DEFAULT_SHARES)
   const { method } = await bindKey(ctx, socket, createSoftAuthenticator({ rpId: config.rpId }))
 
   await rejectsWith(
@@ -290,7 +290,7 @@ test('deleting a method removes its shares only, and only for its owner', async 
   await ctx.call('recovery-method-delete', socket, { methodId: method.id })
   assert.equal(ctx.methodStore.rows.size, 0)
   assert.deepEqual(await ctx.shareStore.retrieveUserShares(socket.userId, method.id), [])
-  assert.deepEqual(await ctx.shareStore.retrieveUserShares(socket.userId), PASSWORD_SHARES)
+  assert.deepEqual(await ctx.shareStore.retrieveUserShares(socket.userId), DEFAULT_SHARES)
   await rejectsWith(
     ctx.call('recovery-method-delete', socket, { methodId: method.id }),
     RecoveryErrorMsg.methodNotFound

@@ -1,5 +1,5 @@
 /** In-memory stand-ins with the same contract as RecoveryMethodStore / SecretShareStore. */
-import { PASSWORD_METHOD_ID } from '../../src/RecoverySchema.js'
+import { DEFAULT_METHOD_ID } from '../../src/RecoverySchema.js'
 
 export function memoryMethodStore() {
   const rows = new Map()
@@ -46,7 +46,7 @@ export function memoryShareStore({ dbCount = 3, down = [] } = {}) {
   const key = (userId, methodId) => `${userId}\u0000${methodId}`
   return {
     dbs,
-    async retrieveUserShares(userId, methodId = PASSWORD_METHOD_ID) {
+    async retrieveUserShares(userId, methodId = DEFAULT_METHOD_ID) {
       return dbs
         .filter((_, j) => !down.includes(j))
         .map((db) => db.get(key(userId, methodId)))
@@ -61,7 +61,7 @@ export function memoryShareStore({ dbCount = 3, down = [] } = {}) {
         }
       })
     },
-    async storeUserShares(userId, shares, methodId = PASSWORD_METHOD_ID) {
+    async storeUserShares(userId, shares, methodId = DEFAULT_METHOD_ID) {
       let i = 0
       for (let j = 0; i < shares.length && j < dbs.length; j++) {
         if (down.includes(j)) continue

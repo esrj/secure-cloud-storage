@@ -7,7 +7,7 @@ import ConfigManager from './ConfigManager.js'
 import { logger } from './Logger.js'
 import { createSecretShareStore } from './SecretShareStore.js'
 
-export { PASSWORD_METHOD_ID } from './RecoverySchema.js'
+export { DEFAULT_METHOD_ID } from './RecoverySchema.js'
 
 //--  Setup --//
 export const secretShareDbPools = []

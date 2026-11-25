@@ -18,7 +18,7 @@
 import { Client } from 'pg'
 import ConfigManager from './ConfigManager.js'
 import { logger } from './Logger.js'
-import { RECOVERY_METHOD_TABLE_SQL, SECRET_SHARE_SQLS } from './RecoverySchema.js'
+import { RECOVERY_METHOD_TABLE_SQL, SHARE_DB_SQLS } from './RecoverySchema.js'
 
 // ─── Main storage database schema ─────────────────────────────────────────
 //
@@ -322,7 +322,8 @@ async function createRoleAndDatabases(client, mainCfg, shareConfigs) {
  * don't already exist, trying several credential candidates in order:
  *   1. the configured application user (works when the role already exists
  *      and was granted CREATEDB — no superuser guessing needed)
- *   2. postgres / postgres          (common Linux / Docker default)
+ *   2. the roles listed under database.bootstrapRoles in the config
+ *      (config/default.yaml lists the common Linux / Docker superuser)
  *   3. <OS user> / ''               (macOS Homebrew — trust auth, no password)
  *   4. <OS user> / <OS user>        (some Homebrew setups with peer/md5)
  *
@@ -342,7 +343,7 @@ async function bootstrapRoleAndDatabases(mainCfg, shareConfigs) {
   const seen = new Set()
   const candidates = [
     { user: mainCfg.user, password: mainCfg.password },
-    { user: 'postgres', password: 'postgres' },
+    ...ConfigManager.dbBootstrapRoles,
     ...(osUser ? [
       { user: osUser, password: '' },
       { user: osUser, password: osUser },
@@ -433,7 +434,7 @@ export async function initializeSchemas() {
     const cfg   = shareConfigs[i]
     const label = `secret_share DB #${i + 1} "${cfg.database}" @ ${cfg.host}:${cfg.port}`
     try {
-      await runWithClient(cfg, label, SECRET_SHARE_SQLS)
+      await runWithClient(cfg, label, SHARE_DB_SQLS)
     } catch (err) {
       if (err.code === MISSING_ROLE_CODE || err.code === MISSING_DB_CODE) {
         // Missing role/database — bootstrap (idempotent), then retry once.
@@ -443,7 +444,7 @@ export async function initializeSchemas() {
             await bootstrapRoleAndDatabases(mainCfg, shareConfigs)
             shareBootstrapDone = true
           }
-          await runWithClient(cfg, label, SECRET_SHARE_SQLS)
+          await runWithClient(cfg, label, SHARE_DB_SQLS)
         } catch (retryErr) {
           logger.warn(`[SchemaInitializer] ${label} init skipped after bootstrap retry: ${retryErr.message}`)
         }

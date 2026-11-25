@@ -5,8 +5,13 @@
  * same statements.
  */
 
-/** Method id used for the original extra-password backup. */
-export const PASSWORD_METHOD_ID = 'password'
+/**
+ * Id of the recovery method every account starts with: the original backup, protected by
+ * the user's extra password. It is also the column default, so shares stored before
+ * recovery methods existed belong to it. The value is stored in the share databases and
+ * sent to the client, so it must stay as it is.
+ */
+export const DEFAULT_METHOD_ID = 'password'
 
 /**
  * Main database. One row per bound security key. Nothing in here is secret:
@@ -35,10 +40,10 @@ CREATE INDEX IF NOT EXISTS recovery_method_userid_idx ON recovery_method (userid
  * Secret-share databases. Shares are grouped by recovery method, so one user can hold
  * the password shares and one set per bound security key at the same time.
  */
-export const SECRET_SHARE_TABLE_SQL = `
+export const SHARE_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS secret_share (
   userid      TEXT    NOT NULL,
-  method_id   TEXT    NOT NULL DEFAULT '${PASSWORD_METHOD_ID}',
+  method_id   TEXT    NOT NULL DEFAULT '${DEFAULT_METHOD_ID}',
   share       TEXT    NOT NULL,
   retrievable BOOLEAN NOT NULL,
   PRIMARY KEY (userid, method_id)
@@ -50,8 +55,8 @@ CREATE TABLE IF NOT EXISTS secret_share (
  * (PRIMARY KEY (userid)). Existing rows become the password method.
  * Idempotent, and runs as one implicit transaction.
  */
-export const SECRET_SHARE_MIGRATION_SQL = `
-ALTER TABLE secret_share ADD COLUMN IF NOT EXISTS method_id TEXT NOT NULL DEFAULT '${PASSWORD_METHOD_ID}';
+export const SHARE_MIGRATION_SQL = `
+ALTER TABLE secret_share ADD COLUMN IF NOT EXISTS method_id TEXT NOT NULL DEFAULT '${DEFAULT_METHOD_ID}';
 DO $$
 DECLARE
   pk_name TEXT;
@@ -70,4 +75,5 @@ BEGIN
 END $$;
 `
 
-export const SECRET_SHARE_SQLS = [SECRET_SHARE_TABLE_SQL, SECRET_SHARE_MIGRATION_SQL]
+/** Statements for one share database, in the order they are run. */
+export const SHARE_DB_SQLS = [SHARE_TABLE_SQL, SHARE_MIGRATION_SQL]

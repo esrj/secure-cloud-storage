@@ -33,6 +33,10 @@ database: # Database settings
   ssl:
     rejectUnauthorized: true
   descMaxLength: 2000
+  # 角色或資料庫還不存在時（新環境第一次啟動），Server 依序用這些管理者帳號嘗試自動建立；設成 [] 即不使用
+  bootstrapRoles:
+  - user: postgres
+    password: postgres
   # null values will be seen as the same as global settings
   secretShare:
   - user: null

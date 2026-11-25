@@ -39,6 +39,8 @@ class ConfigManager {
       rejectUnauthorized: true
     }
   }
+  // Superuser logins SchemaInitializer.js may try, only when the role or a database is missing
+  dbBootstrapRoles = []
   directoryConfig = {}
   login = {
     idleTimeoutMin: 30,
@@ -140,6 +142,16 @@ class ConfigManager {
           ssl: this.dbPoolConfig.ssl
         })
       }
+
+      // Bootstrap roles (optional list; without it only the application user and the OS user are tried)
+      const bootstrapRoles = config.has('database.bootstrapRoles')
+        ? config.get('database.bootstrapRoles')
+        : []
+      this.dbBootstrapRoles = Array.isArray(bootstrapRoles)
+        ? bootstrapRoles.filter(
+            (role) => role && typeof role.user === 'string' && role.user.length > 0
+          )
+        : []
 
       // Blockchain
       this.blockchain = {}
