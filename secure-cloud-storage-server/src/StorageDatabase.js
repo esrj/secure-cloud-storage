@@ -367,17 +367,18 @@ export const updateFileDescPermInDatabase = async (uuid, description, permission
 }
 
 /**
- * Moves a file to a different parent folder.
+ * Moves a file of the given owner to a different parent folder.
  *
  * @param {string} uuid - The UUID of the file.
  * @param {string|null} parentFolderId - The ID of the new parent folder, or null for root.
- * @returns {Promise<object>}
+ * @param {string} ownerId - The user the file has to belong to.
+ * @returns {Promise<object>} rowCount is 0 if the user has no such file
  */
-export const moveFileToFolder = async (uuid, parentFolderId) => {
-  const params = [parentFolderId, uuid]
+export const moveFileToFolder = async (uuid, parentFolderId, ownerId) => {
+  const params = [parentFolderId, uuid, ownerId]
   return await pool.query(
     `
-        UPDATE files SET parentFolderId = $1 WHERE id = $2
+        UPDATE files SET parentFolderId = $1 WHERE id = $2 AND ownerId = $3
     `,
     params
   )

@@ -430,7 +430,8 @@ const moveFileBinder = (socket) => {
         cb({ errorMsg: 'Target folder not found.' })
         return
       }
-      if ((await moveFileToFolder(fileId, targetFolderId).rowCount) === 0) {
+      const moved = await moveFileToFolder(fileId, targetFolderId, socket.userId)
+      if (moved.rowCount === 0) {
         logSocketWarning(socket, actionStr + ' but file does not exist.', request)
         cb({ errorMsg: FileNotFoundErrorMsg })
         return
