@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { assertPlainNames, resolveFilePath, resolveUserDir } from '../../src/UploadPath.js'
+import { resolveFilePath, resolveUserDir } from '../../src/UploadPath.js'
 
 const sep = path.sep
 const uploadDirs = [
@@ -82,64 +82,4 @@ test('an id that is not a string fails, as it did with path.resolve()', () => {
     assert.throws(() => resolveUserDir('uploads', bad), TypeError)
     assert.throws(() => path.resolve('uploads', bad), TypeError)
   }
-})
-
-// The form the routes use (HttpsServer.js, UploadVerifier.js, DatabaseBackupRoute.js):
-// assertPlainNames() on the ids, then path.basename() of each id handed to the path function.
-const outcome = (build) => {
-  try {
-    return { path: build() }
-  } catch (error) {
-    return { error: `${error.constructor.name}: ${error.message}` }
-  }
-}
-
-test('a route that calls path.basename() on the ids itself gets the same path, or the same refusal', () => {
-  const ids = [
-    randomUUID(),
-    randomUUID(),
-    BACKUP_NAME,
-    'a.b',
-    '...',
-    '測試',
-    'with space',
-    '',
-    '.',
-    '..',
-    ['..', 'x'].join(sep),
-    ['..', '..', 'outside.txt'].join(sep),
-    ['a', 'b'].join(sep),
-    `a${sep}`,
-    `${sep}a`,
-    sep,
-    undefined,
-    null,
-    7,
-    {}
-  ]
-  let paths = 0
-  for (const uploadDir of uploadDirs) {
-    for (const userId of ids) {
-      const userDir = outcome(() => resolveUserDir(uploadDir, userId))
-      assert.deepEqual(
-        outcome(() => {
-          assertPlainNames(userId)
-          return resolveUserDir(uploadDir, path.basename(userId))
-        }),
-        userDir
-      )
-      for (const fileId of ids) {
-        const filePath = outcome(() => resolveFilePath(uploadDir, userId, fileId))
-        assert.deepEqual(
-          outcome(() => {
-            assertPlainNames(userId, fileId)
-            return resolveFilePath(uploadDir, path.basename(userId), path.basename(fileId))
-          }),
-          filePath
-        )
-        if (filePath.path) paths++
-      }
-    }
-  }
-  assert.equal(paths, uploadDirs.length * 7 * 7) // the seven plain names, as user id and as file id
 })

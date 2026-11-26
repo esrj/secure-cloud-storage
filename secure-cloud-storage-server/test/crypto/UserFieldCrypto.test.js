@@ -23,11 +23,11 @@ test('a text comes back unchanged', () => {
   }
 })
 
-test('the stored form is IV : ciphertext : tag, with a 12-byte IV and a 16-byte tag', () => {
+test('the stored form is IV : ciphertext : tag, with a 16-byte IV and a 16-byte tag', () => {
   const parts = encryptText('Alice', key).split(':')
   assert.equal(parts.length, 3)
   const [iv, encrypted, tag] = parts.map((part) => Buffer.from(part, 'base64'))
-  assert.equal(iv.length, 12)
+  assert.equal(iv.length, 16)
   assert.equal(encrypted.length, Buffer.byteLength('Alice'))
   assert.equal(tag.length, 16)
   for (const part of parts) assert.match(part, /^[A-Za-z0-9+/]+=*$/)

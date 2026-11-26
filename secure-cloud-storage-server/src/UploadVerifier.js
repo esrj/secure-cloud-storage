@@ -15,8 +15,6 @@ import {
 } from './Utils.js'
 import BlockchainManager from './BlockchainManager.js'
 import { unlink } from 'node:fs/promises'
-import path from 'path'
-import { assertPlainNames } from './UploadPath.js'
 import ConfigManager from './ConfigManager.js'
 import { emitToOnlineUser } from './UserLoginInfo.js'
 import { fileTypeFromFile } from 'file-type'
@@ -178,10 +176,8 @@ const revertUpload = async (userId, fileId, errorMsg) => {
     logger.info(`reverting upload.`, { userId, fileId, errorMsg })
     // remove file from database
     await deleteFileOfOwnerId(fileId, userId)
-    // remove file from disc. The ids can come from an upload request, so path.basename() is
-    // called on them here, on the line that builds the path (see UploadPath.js).
-    assertPlainNames(userId, fileId)
-    const filePath = getFilePath(path.basename(userId), path.basename(fileId))
+    // remove file from disc
+    const filePath = getFilePath(userId, fileId)
     await unlink(filePath)
     // send message to client if online
     emitToOnlineUser(userId, 'upload-file-res', { fileId, errorMsg })
