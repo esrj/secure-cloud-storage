@@ -19,16 +19,16 @@ const bodyOf = (tracked) => tracked.slice(VERSION_PREFIX.length)
 /** As the client does for the visible watermark: drop the version, keep 8 characters. */
 const visiblePart = (tracked) => tracked.replace(/^v\d+/, '').slice(0, 8)
 
-test('an encoded user id decodes back to the user id', () => {
+test('an encoded user id decodes back to the user id', async () => {
   for (let i = 0; i < 50; i++) {
     const userId = randomUUID()
-    assert.equal(decodeWithKey(key, encodeWithKey(key, userId)), userId)
+    assert.equal(decodeWithKey(key, await encodeWithKey(key, userId)), userId)
   }
-  assert.equal(decodeWithKey(key, encodeWithKey(key, 'a')), 'a')
+  assert.equal(decodeWithKey(key, await encodeWithKey(key, 'a')), 'a')
 })
 
-test('the value is the version, then hex: tag, IV, ciphertext', () => {
-  const tracked = encodeWithKey(key, randomUUID())
+test('the value is the version, then hex: tag, IV, ciphertext', async () => {
+  const tracked = await encodeWithKey(key, randomUUID())
   assert.ok(tracked.startsWith(VERSION_PREFIX))
   assert.match(bodyOf(tracked), /^[0-9a-f]+$/)
   // a UUID is 36 characters: three AES blocks
@@ -37,9 +37,9 @@ test('the value is the version, then hex: tag, IV, ciphertext', () => {
   assert.match(`uid:${tracked} | fid:abc`, /uid:((?:v\d+)?[a-f0-9]+)/i)
 })
 
-test('every encoding has a new IV, but all encodings of one user share the tag', () => {
+test('every encoding has a new IV, but all encodings of one user share the tag', async () => {
   const userId = randomUUID()
-  const all = Array.from({ length: 200 }, () => encodeWithKey(key, userId))
+  const all = await Promise.all(Array.from({ length: 200 }, () => encodeWithKey(key, userId)))
   assert.equal(new Set(all).size, 200)
   assert.equal(new Set(all.map((t) => bodyOf(t).slice(TAG_BYTES * 2, (TAG_BYTES + IV_BYTES) * 2))).size, 200)
   assert.equal(new Set(all.map((t) => bodyOf(t).slice(0, TAG_BYTES * 2))).size, 1)
@@ -47,33 +47,33 @@ test('every encoding has a new IV, but all encodings of one user share the tag',
   for (const tracked of all) assert.equal(decodeWithKey(key, tracked), userId)
 })
 
-test('the value never starts with a digit, so taking the version off never eats into it', () => {
+test('the value never starts with a digit, so taking the version off never eats into it', async () => {
   // The client removes /^v\d+/. A digit right after the version would be removed with it.
   for (let i = 0; i < 2000; i++) {
-    const tracked = encodeWithKey(key, randomUUID())
+    const tracked = await encodeWithKey(key, randomUUID())
     assert.match(tracked[VERSION_PREFIX.length], /[a-f]/)
     assert.equal(tracked.replace(/^v\d+/, ''), bodyOf(tracked))
   }
 })
 
-test('the visible prefix finds its user among many, and nobody else', () => {
+test('the visible prefix finds its user among many, and nobody else', async () => {
   const users = Array.from({ length: 500 }, () => randomUUID())
   // every single user, not a sample: the visible part printed for them leads back to them
   for (const target of users) {
-    const prefix = visiblePart(encodeWithKey(key, target))
+    const prefix = visiblePart(await encodeWithKey(key, target))
     assert.equal(prefix.length, 8)
     assert.equal(matchesPrefixWithKey(key, target, prefix), true)
     // a second download of the same user gives the same prefix
-    assert.equal(visiblePart(encodeWithKey(key, target)), prefix)
+    assert.equal(visiblePart(await encodeWithKey(key, target)), prefix)
   }
   const target = users[137]
-  const prefix = visiblePart(encodeWithKey(key, target))
+  const prefix = visiblePart(await encodeWithKey(key, target))
   assert.deepEqual(
     users.filter((id) => matchesPrefixWithKey(key, id, prefix)),
     [target]
   )
   // longer prefixes work the same way; past the tag only the tag is compared
-  const body = bodyOf(encodeWithKey(key, target))
+  const body = bodyOf(await encodeWithKey(key, target))
   for (const length of [1, 8, 16, TAG_BYTES * 2, TAG_BYTES * 2 + 10]) {
     assert.equal(matchesPrefixWithKey(key, target, body.slice(0, length)), true)
   }
@@ -82,17 +82,17 @@ test('the visible prefix finds its user among many, and nobody else', () => {
   assert.equal(matchesPrefixWithKey(key, target, VERSION_PREFIX + body.slice(0, 8)), false)
 })
 
-test('another key gives another tag and cannot decode', () => {
+test('another key gives another tag and cannot decode', async () => {
   const userId = randomUUID()
   const other = randomBytes(32)
-  const tracked = encodeWithKey(key, userId)
+  const tracked = await encodeWithKey(key, userId)
   assert.throws(() => decodeWithKey(other, tracked))
-  assert.notEqual(visiblePart(encodeWithKey(other, userId)), visiblePart(tracked))
+  assert.notEqual(visiblePart(await encodeWithKey(other, userId)), visiblePart(tracked))
 })
 
-test('an edited or invented value is rejected', () => {
+test('an edited or invented value is rejected', async () => {
   const userId = randomUUID()
-  const tracked = encodeWithKey(key, userId)
+  const tracked = await encodeWithKey(key, userId)
   const body = bodyOf(tracked)
   const flipAt = (index) => {
     const replacement = body[index] === '0' ? '1' : '0'
@@ -103,7 +103,7 @@ test('an edited or invented value is rejected', () => {
     assert.throws(() => decodeWithKey(key, flipAt(index)), `changed at ${index}`)
   }
   // the tag of one user in front of the rest of another user's value
-  const otherBody = bodyOf(encodeWithKey(key, randomUUID()))
+  const otherBody = bodyOf(await encodeWithKey(key, randomUUID()))
   assert.throws(
     () => decodeWithKey(key, VERSION_PREFIX + body.slice(0, 32) + otherBody.slice(32)),
     /integrity check failed/
@@ -121,14 +121,21 @@ test('an edited or invented value is rejected', () => {
   }
 })
 
-test('only a non-empty string can be encoded', () => {
+test('only a non-empty string can be encoded', async () => {
   for (const bad of ['', undefined, null, 7]) {
-    assert.throws(() => encodeWithKey(key, bad), /non-empty string/)
+    await assert.rejects(encodeWithKey(key, bad), /non-empty string/)
   }
 })
 
-test('full values are told apart from short prefixes', () => {
-  const tracked = encodeWithKey(key, randomUUID())
+test('a key that is not 32 bytes is refused', async () => {
+  for (const length of [0, 16, 24, 31, 33, 64]) {
+    await assert.rejects(encodeWithKey(randomBytes(length), randomUUID()), /Invalid key length/, `${length} bytes`)
+  }
+  await assert.rejects(encodeWithKey(undefined, randomUUID()), /Invalid key length/)
+})
+
+test('full values are told apart from short prefixes', async () => {
+  const tracked = await encodeWithKey(key, randomUUID())
   assert.equal(looksFull(tracked), true)
   assert.equal(looksFull(visiblePart(tracked)), false)
   assert.equal(looksFull(bodyOf(tracked)), false)

@@ -16,7 +16,7 @@ import { decryptBytes, encryptBytes } from './AesCbc'
 export async function encryptDataShareKey(sk, dataStr) {
   // Encrypt data and share sk
   const key = await deriveAESKeyFromBuffer(new TextEncoder().encode(sk))
-  const encrypted = encryptBytes(key, Buffer.from(dataStr, 'utf8')).toString('hex')
+  const encrypted = (await encryptBytes(key, Buffer.from(dataStr, 'utf8'))).toString('hex')
 
   const secret = Buffer.from(encrypted)
   const shares = sss.split(secret, { shares: 10, threshold: 2 })

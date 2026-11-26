@@ -86,9 +86,9 @@ function loadOrCreateKey() {
  * each time (random IV).
  *
  * @param {string} plainUid
- * @returns {string} tracked uid, hex-encoded with the version prefix
+ * @returns {Promise<string>} tracked uid, hex-encoded with the version prefix
  */
-export function encodeTrackedUid(plainUid) {
+export async function encodeTrackedUid(plainUid) {
   return encodeWithKey(loadOrCreateKey(), plainUid)
 }
 

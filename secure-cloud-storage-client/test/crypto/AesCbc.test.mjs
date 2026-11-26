@@ -31,23 +31,23 @@ const inPieces = (data, size) =>
   )
 const sizes = [0, 1, 15, 16, 17, 31, 32, 1000, 65536, 3 * 65536 + 5]
 
-test('a buffer comes back unchanged, and the stored form is IV + ciphertext', () => {
+test('a buffer comes back unchanged, and the stored form is IV + ciphertext', async () => {
   const key = randomBytes(32)
   for (const size of sizes) {
     const plain = randomBytes(size)
-    const stored = encryptBytes(key, plain)
+    const stored = await encryptBytes(key, plain)
     assert.equal(stored.length, IV_BYTES + paddedLength(size))
     assert.ok(decryptBytes(key, stored).equals(plain), `size ${size}`)
   }
 })
 
-test('every encryption uses a new IV, so equal input gives different output', () => {
+test('every encryption uses a new IV, so equal input gives different output', async () => {
   const key = randomBytes(32)
   const plain = Buffer.from('the same content, encrypted many times')
   const seenIvs = new Set()
   const seenOutputs = new Set()
   for (let i = 0; i < 200; i++) {
-    const stored = encryptBytes(key, plain)
+    const stored = await encryptBytes(key, plain)
     seenIvs.add(stored.subarray(0, IV_BYTES).toString('hex'))
     seenOutputs.add(stored.toString('hex'))
     assert.ok(decryptBytes(key, stored).equals(plain))
@@ -70,12 +70,59 @@ test('a stream comes back unchanged, whatever the size and the chunking', async 
   }
 })
 
+test('however the input arrives in pieces, the stream gives the encryption of the whole', async () => {
+  // The stream is encrypted piece by piece (see ivThenEncrypted), so the pieces are tried in
+  // sizes below, at and above the block size, and in sizes that leave bytes over each time.
+  const key = randomBytes(32)
+  for (const size of [0, 1, 15, 16, 17, 31, 32, 33, 1000, 65536, 3 * 65536 + 5]) {
+    const plain = randomBytes(size)
+    for (const pieceSize of [1, 5, 15, 16, 17, 33, 4096, 65536, 100000]) {
+      if (pieceSize < 15 && size > 1000) continue // the smallest pieces only for the small ones
+      const stored = await collect(encryptStream(key, inPieces(plain, pieceSize)))
+      assert.equal(stored.length, IV_BYTES + paddedLength(size), `size ${size}, pieces of ${pieceSize}`)
+      // read back in one go by the buffer form: the same bytes as one encryption of the whole
+      assert.ok(decryptBytes(key, stored).equals(plain), `size ${size}, pieces of ${pieceSize}`)
+    }
+  }
+})
+
+test('a key that is not 32 bytes is refused', async () => {
+  const plain = randomBytes(100)
+  for (const length of [0, 16, 24, 31, 33, 64]) {
+    const key = randomBytes(length)
+    await assert.rejects(encryptBytes(key, plain), /Invalid key length/, `${length} bytes`)
+    assert.throws(() => encryptStream(key, inPieces(plain, 50)), /Invalid key length/, `${length} bytes`)
+  }
+  await assert.rejects(encryptBytes(undefined, plain), /Invalid key length/)
+  assert.throws(() => encryptStream(undefined, inPieces(plain, 50)), /Invalid key length/)
+})
+
+test('a 32-byte key handed over as ArrayBuffer works the same (that is how the app holds its keys)', async () => {
+  const key = randomBytes(32)
+  const asArrayBuffer = key.buffer.slice(key.byteOffset, key.byteOffset + key.length)
+  const plain = randomBytes(5000)
+  assert.ok(decryptBytes(key, await encryptBytes(asArrayBuffer, plain)).equals(plain))
+  assert.ok(decryptBytes(asArrayBuffer, await collect(encryptStream(asArrayBuffer, inPieces(plain, 999)))).equals(plain))
+})
+
+test('an error while reading the input arrives as an error of the encrypted stream', async () => {
+  const key = randomBytes(32)
+  const failing = Readable.from(
+    (function* () {
+      yield randomBytes(5000)
+      throw new Error('read failed')
+    })(),
+    { objectMode: false }
+  )
+  await assert.rejects(collect(encryptStream(key, failing)), /read failed/)
+})
+
 test('the stream form and the buffer form are the same format', async () => {
   const key = randomBytes(32)
   const plain = randomBytes(70000)
   const fromStream = await collect(encryptStream(key, inPieces(plain, 9999)))
   assert.ok(decryptBytes(key, fromStream).equals(plain))
-  const fromBuffer = encryptBytes(key, plain)
+  const fromBuffer = await encryptBytes(key, plain)
   assert.ok((await collect(inPieces(fromBuffer, 9999).pipe(createDecryptStream(key)))).equals(plain))
 })
 
@@ -91,7 +138,7 @@ test('two streams of the same file do not share an IV', async () => {
 test('a wrong key or damaged data is reported as an error, not returned as content', async () => {
   const key = randomBytes(32)
   const plain = randomBytes(4000)
-  const stored = encryptBytes(key, plain)
+  const stored = await encryptBytes(key, plain)
   const failures = []
   const tryBytes = (k, data) => {
     try {
@@ -133,7 +180,7 @@ test('a wrong key or damaged data is reported as an error, not returned as conte
 
 test('an error in the decrypt stream arrives as an error event, as FileManager expects', async () => {
   const key = randomBytes(32)
-  const stored = encryptBytes(key, randomBytes(100))
+  const stored = await encryptBytes(key, randomBytes(100))
   const decrypt = createDecryptStream(key)
   const seen = new Promise((resolve) => decrypt.once('error', resolve))
   decrypt.resume()

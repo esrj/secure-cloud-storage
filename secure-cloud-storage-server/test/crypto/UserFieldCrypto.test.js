@@ -16,15 +16,15 @@ const key = randomBytes(32)
 const lookupKey = randomBytes(32)
 const texts = ['Alice', '使用者 A', 'a', 'someone@example.com', 'Mixed.Case+tag@Example.COM', 'x'.repeat(5000)]
 
-test('a text comes back unchanged', () => {
+test('a text comes back unchanged', async () => {
   for (const text of texts) {
-    assert.equal(decryptText(encryptText(text, key), key), text)
-    assert.equal(decryptSearchable(encryptSearchable(text, key, lookupKey), key), text)
+    assert.equal(decryptText(await encryptText(text, key), key), text)
+    assert.equal(decryptSearchable(await encryptSearchable(text, key, lookupKey), key), text)
   }
 })
 
-test('the stored form is IV : ciphertext : tag, with a 16-byte IV and a 16-byte tag', () => {
-  const parts = encryptText('Alice', key).split(':')
+test('the stored form is IV : ciphertext : tag, with a 16-byte IV and a 16-byte tag', async () => {
+  const parts = (await encryptText('Alice', key)).split(':')
   assert.equal(parts.length, 3)
   const [iv, encrypted, tag] = parts.map((part) => Buffer.from(part, 'base64'))
   assert.equal(iv.length, 16)
@@ -33,11 +33,11 @@ test('the stored form is IV : ciphertext : tag, with a 16-byte IV and a 16-byte 
   for (const part of parts) assert.match(part, /^[A-Za-z0-9+/]+=*$/)
 })
 
-test('every encryption uses a new IV, so the same text never repeats', () => {
+test('every encryption uses a new IV, so the same text never repeats', async () => {
   const ivs = new Set()
   const values = new Set()
   for (let i = 0; i < 300; i++) {
-    const stored = encryptText('same-name', key)
+    const stored = await encryptText('same-name', key)
     ivs.add(stored.split(':')[0])
     values.add(stored)
   }
@@ -56,10 +56,10 @@ test('the lookup value is the same for the same text and the same key, and only 
   assert.notEqual(lookupValue(email, randomBytes(32)), lookupValue(email, lookupKey))
 })
 
-test('a searchable value starts with the lookup value and can be found by it', () => {
+test('a searchable value starts with the lookup value and can be found by it', async () => {
   const email = 'someone@example.com'
-  const first = encryptSearchable(email, key, lookupKey)
-  const second = encryptSearchable(email, key, lookupKey)
+  const first = await encryptSearchable(email, key, lookupKey)
+  const second = await encryptSearchable(email, key, lookupKey)
   assert.notEqual(first, second)
   // what the SQL does: split_part(email, ':', 1)
   assert.equal(first.split(':')[0], lookupValue(email, lookupKey))
@@ -68,17 +68,29 @@ test('a searchable value starts with the lookup value and can be found by it', (
   assert.ok(!first.includes(email))
 })
 
-test('keys handed over as ArrayBuffer work the same (that is how the server derives them)', () => {
+test('keys handed over as ArrayBuffer work the same (that is how the server derives them)', async () => {
   const asArrayBuffer = (buffer) => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length)
   const email = 'someone@example.com'
-  const stored = encryptSearchable(email, asArrayBuffer(key), asArrayBuffer(lookupKey))
+  const stored = await encryptSearchable(email, asArrayBuffer(key), asArrayBuffer(lookupKey))
   assert.equal(decryptSearchable(stored, key), email)
   assert.equal(stored.split(':')[0], lookupValue(email, lookupKey))
-  assert.equal(decryptText(encryptText('Alice', key), asArrayBuffer(key)), 'Alice')
+  assert.equal(decryptText(await encryptText('Alice', key), asArrayBuffer(key)), 'Alice')
 })
 
-test('a changed value, a wrong key or another format is refused', () => {
-  const stored = encryptText('Alice', key)
+test('a key that is not 32 bytes is refused', async () => {
+  for (const length of [0, 16, 24, 31, 33, 64]) {
+    await assert.rejects(encryptText('Alice', randomBytes(length)), /Invalid key length/, `${length} bytes`)
+    await assert.rejects(
+      encryptSearchable('someone@example.com', randomBytes(length), lookupKey),
+      /Invalid key length/,
+      `${length} bytes`
+    )
+  }
+  await assert.rejects(encryptText('Alice', undefined), /Invalid key length/)
+})
+
+test('a changed value, a wrong key or another format is refused', async () => {
+  const stored = await encryptText('Alice', key)
   const [iv, encrypted, tag] = stored.split(':')
   const flip = (b64) => {
     const bytes = Buffer.from(b64, 'base64')

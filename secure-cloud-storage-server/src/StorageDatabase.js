@@ -160,8 +160,8 @@ export const updateUserStatusById = async (id, status) => {
  * @returns {Promise<import('pg').QueryResult>} A promise that resolves to the query result.
  */
 export const updateUserInfoById = async (id, name, email) => {
-  const encryptedName = encryptText(name, key)
-  const encryptedEmail = encryptSearchable(email, key, lookupKey)
+  const encryptedName = await encryptText(name, key)
+  const encryptedEmail = await encryptSearchable(email, key, lookupKey)
   return await pool.query('UPDATE users SET name = $1, email = $2 WHERE id = $3', [
     encryptedName,
     encryptedEmail,
@@ -194,8 +194,8 @@ export const AddUserAndGetId = async (
   role = userRoleType.user
 ) => {
   const id = randomUUID().toString()
-  const encryptedName = encryptText(name, key)
-  const encryptedEmail = encryptSearchable(email, key, lookupKey)
+  const encryptedName = await encryptText(name, key)
+  const encryptedEmail = await encryptSearchable(email, key, lookupKey)
   const info = await pool.query(
     'INSERT INTO users (id, pk, address, name, email, status, role) VALUES ($1, $2, $3, $4, $5, $6, $7)',
     [id, pk, blockchainAddress, encryptedName, encryptedEmail, userStatusType.activate, role]

@@ -755,7 +755,7 @@ const downloadWithWatermarkBinder = (socket) => {
       // (decoding will fail or return an unrecognized id).
       let trackedUserId
       try {
-        trackedUserId = encodeTrackedUid(socket.userId)
+        trackedUserId = await encodeTrackedUid(socket.userId)
       } catch (e) {
         logger.error('Failed to encode tracked uid:', e)
         cb({ errorMsg: InternalServerErrorMsg })
