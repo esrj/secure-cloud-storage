@@ -2,53 +2,33 @@
  * This file handles actual upload and download for HTTPS protocol.
  */
 import { logger, logHttpsError, logHttpsInfo, logHttpsWarning } from './Logger.js'
-import { mkdir } from 'node:fs/promises'
-import multer from 'multer'
 import { getFileInfo, getUserByKey } from './StorageDatabase.js'
 import ConfigManager from './ConfigManager.js'
 import { finishUpload, hasUpload } from './UploadVerifier.js'
 import { app } from './SocketIO.js'
 import { FileIdSchema, PublicKeySchema, SocketIDSchema } from './Validation.js'
 import { getLoggedInUserIdOfSocket } from './UserLoginInfo.js'
-import { getUserDir, riskyMimeTypes } from './Utils.js'
+import { riskyMimeTypes } from './Utils.js'
 import { createDownloadHandler, createUploadHandler } from './FileTransferRoute.js'
 import { createDownloadDbHandler, createUploadDbHandler } from './DatabaseBackupRoute.js'
+import { createUploader } from './UploadStorage.js'
 
 // The middleware in this file decides who is asking (auth) and which file is meant
 // (checkUpload, checkDownload) and leaves both ids on the request. The handlers that touch the
-// stored files are in FileTransferRoute.js and DatabaseBackupRoute.js.
+// stored files are in FileTransferRoute.js and DatabaseBackupRoute.js; UploadStorage.js is where
+// multer puts an uploaded body.
 
-// prepare user directory and stored filename
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    try {
-      // Store the uploaded file the user's upload directory
-      const folderPath = getUserDir(req.userId)
-      await mkdir(folderPath, { recursive: true })
-      cb(null, folderPath)
-    } catch (error) {
-      logHttpsError(req, error)
-      cb(error)
-    }
-  },
-  filename: (req, file, cb) => {
-    if (req.path === '/uploadDb') cb(null, 'database.db')
-    else cb(null, req.headers.fileid)
-  },
-  limits: {
-    fileSize: 8000000
-  }
+// One uploader per route. The stored name is given here by the server: the checked file id for
+// /upload, the fixed name database.db for /uploadDb. See UploadStorage.js.
+const uploadFileBody = createUploader({
+  uploadDir: ConfigManager.uploadDir,
+  storedName: (req) => req.fileId,
+  logError: logHttpsError
 })
-// Fix original name encoding problem
-const checkFileType = (req, file, cb) => {
-  file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8')
-
-  cb(null, true)
-}
-const upload = multer({
-  storage: storage,
-  fileFilter: checkFileType,
-  limits: { fileSize: 8000000 }
+const uploadBackupBody = createUploader({
+  uploadDir: ConfigManager.uploadDir,
+  storedName: () => 'database.db',
+  logError: logHttpsError
 })
 
 /**
@@ -146,7 +126,7 @@ app.post(
   '/upload',
   auth,
   checkUpload,
-  upload.single('file'),
+  uploadFileBody.single('file'),
   createUploadHandler({
     uploadDir: ConfigManager.uploadDir,
     finishUpload,
@@ -176,7 +156,7 @@ app.get(
 app.post(
   '/uploadDb',
   auth,
-  upload.single('file'),
+  uploadBackupBody.single('file'),
   createUploadDbHandler({
     uploadDir: ConfigManager.uploadDir,
     riskyMimeTypes,
