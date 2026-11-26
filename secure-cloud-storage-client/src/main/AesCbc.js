@@ -16,9 +16,9 @@ import { Readable, Transform } from 'stream'
 const ALGORITHM = 'aes-256-cbc'
 export const IV_BYTES = 16
 
-async function* ivThenCiphertext(iv, ciphertext) {
+async function* ivThenEncrypted(iv, encrypted) {
   yield iv
-  yield* ciphertext
+  yield* encrypted
 }
 
 /**
@@ -30,7 +30,7 @@ async function* ivThenCiphertext(iv, ciphertext) {
 export function encryptStream(key, readable) {
   const iv = crypto.randomBytes(IV_BYTES)
   const encryptor = crypto.createCipheriv(ALGORITHM, key, iv)
-  return Readable.from(ivThenCiphertext(iv, readable.pipe(encryptor)))
+  return Readable.from(ivThenEncrypted(iv, readable.pipe(encryptor)))
 }
 
 /**

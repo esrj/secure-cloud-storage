@@ -3,7 +3,8 @@
  * Kept free of side-effect imports so it can be tested on its own.
  */
 import { stat } from 'node:fs/promises'
-import { resolveFilePath } from './UploadPath.js'
+import path from 'path'
+import { assertPlainNames, resolveFilePath } from './UploadPath.js'
 
 export const NoDatabaseBackupMsg = 'No database backup.'
 
@@ -17,7 +18,9 @@ export function createDownloadDbHandler({ uploadDir, logInfo = () => {} }) {
       const actionStr = 'Client asks to download encrypted database'
       logInfo(req, actionStr + '.')
 
-      const dbPath = resolveFilePath(uploadDir, req.userId, 'database.db')
+      // path.basename() is called on the id here, in the route, on purpose (see UploadPath.js)
+      assertPlainNames(req.userId)
+      const dbPath = resolveFilePath(uploadDir, path.basename(req.userId), 'database.db')
       let exists = false
       try {
         exists = (await stat(dbPath)).isFile()

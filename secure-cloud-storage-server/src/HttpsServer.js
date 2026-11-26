@@ -3,6 +3,7 @@
  */
 import { logger, logHttpsError, logHttpsInfo, logHttpsWarning } from './Logger.js'
 import { mkdir, unlink } from 'node:fs/promises'
+import path from 'path'
 import multer from 'multer'
 import { getFileInfo, getUserByKey } from './StorageDatabase.js'
 import ConfigManager from './ConfigManager.js'
@@ -12,14 +13,20 @@ import { FileIdSchema, PublicKeySchema, SocketIDSchema } from './Validation.js'
 import { getLoggedInUserIdOfSocket } from './UserLoginInfo.js'
 import { fileTypeFromFile } from 'file-type'
 import { getFilePath, getUserDir, riskyMimeTypes } from './Utils.js'
+import { assertPlainNames } from './UploadPath.js'
 import { createDownloadDbHandler } from './DatabaseBackupRoute.js'
+
+// Where a route below builds the path of a stored file from ids on the request, it calls
+// path.basename() on each id on that line, after assertPlainNames() has refused an id that
+// this would change. UploadPath.js explains why it is written out in the route.
 
 // prepare user directory and stored filename
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
       // Store the uploaded file the user's upload directory
-      const folderPath = getUserDir(req.userId)
+      assertPlainNames(req.userId)
+      const folderPath = getUserDir(path.basename(req.userId))
       await mkdir(folderPath, { recursive: true })
       cb(null, folderPath)
     } catch (error) {
@@ -131,7 +138,8 @@ app.post('/upload', auth, checkUpload, upload.single('file'), async (req, res, n
   } catch (error) {
     try {
       // Same file as req.file.path, located by the server's own ids
-      const storedPath = getFilePath(req.userId, req.file.filename)
+      assertPlainNames(req.userId, req.file.filename)
+      const storedPath = getFilePath(path.basename(req.userId), path.basename(req.file.filename))
       await unlink(storedPath)
     } catch (error) {
       if (error.code !== 'ENOENT') {
@@ -168,7 +176,8 @@ app.get('/download', auth, async (req, res, next) => {
       res.status(403).send('File not owned.')
     } else {
       logHttpsInfo(req, 'Client downloading file.')
-      const filePath = getFilePath(req.userId, fileInfo.id)
+      assertPlainNames(req.userId, fileInfo.id)
+      const filePath = getFilePath(path.basename(req.userId), path.basename(fileInfo.id))
       res.download(filePath, fileInfo.name)
     }
   } catch (error) {
@@ -183,7 +192,8 @@ app.post('/uploadDb', auth, upload.single('file'), async (req, res, next) => {
   try {
     if (req.file) {
       // check mime type
-      const filePath = getFilePath(req.userId, 'database.db')
+      assertPlainNames(req.userId)
+      const filePath = getFilePath(path.basename(req.userId), 'database.db')
       const fileMime = await fileTypeFromFile(filePath)
       if (fileMime && riskyMimeTypes.includes(fileMime.mime)) {
         logHttpsWarning('Client upload a file with risky mime type for encrypted database', fileMime)
