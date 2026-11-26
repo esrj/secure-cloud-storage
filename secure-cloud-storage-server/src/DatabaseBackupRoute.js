@@ -15,7 +15,7 @@ export const NoDatabaseBackupMsg = 'No database backup.'
  *   uploadDir: string,
  *   riskyMimeTypes: string[],
  *   logInfo?: (req: object, message: string, meta?: object) => void,
- *   logWarning?: (...args: any[]) => void
+ *   logWarning?: (req: object, message: string, meta?: object) => void
  * }} options
  * @returns {(req, res, next) => Promise<void>} expects req.userId from the auth middleware
  */
@@ -32,9 +32,11 @@ export function createUploadDbHandler({
         const filePath = resolveFilePath(uploadDir, req.userId, 'database.db')
         const fileMime = await fileTypeFromFile(filePath)
         if (fileMime && riskyMimeTypes.includes(fileMime.mime)) {
-          // Called without req, as this line always has been: the entry carries the detected
-          // type and no client details.
-          logWarning('Client upload a file with risky mime type for encrypted database', fileMime)
+          logWarning(
+            req,
+            'Client upload a file with risky mime type for encrypted database',
+            fileMime
+          )
           await unlink(filePath)
           res.status(415).send('Risky mime type')
           return

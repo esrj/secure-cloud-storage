@@ -66,7 +66,8 @@ const uploadBackup = async (userId, bytes) => {
     uploadDir,
     riskyMimeTypes: ['application/pdf'],
     logInfo: (req, ...rest) => seen.info.push(rest),
-    logWarning: (...args) => seen.warnings.push(args)
+    // Like the real log function, it is given the request first: keep who it was about
+    logWarning: (req, ...rest) => seen.warnings.push([req.userId, ...rest])
   })
   const req = { userId, file: bytes === undefined ? undefined : { originalname: 'database.db' } }
   await handler(req, res, (error) => {
@@ -99,6 +100,7 @@ test('a backup whose content is of a refused type is removed and answered with 4
   )
   assert.deepEqual(seen.warnings, [
     [
+      'pdf-uploader',
       'Client upload a file with risky mime type for encrypted database',
       { ext: 'pdf', mime: 'application/pdf' }
     ]
