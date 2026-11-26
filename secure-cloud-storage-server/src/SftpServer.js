@@ -77,6 +77,7 @@ new Server({ hostKeys: [fs.readFileSync(ConfigManager.sshKeyPath)] }, (client, i
                   fileId,
                   'Client tries to upload file but upload info does not exist.'
                 )
+                return sftp.status(reqId, utils.sftp.STATUS_CODE.PERMISSION_DENIED)
               }
               openedFileName = filename
               // Actually open the file and store the file descriptor 
